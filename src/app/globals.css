@@ -163,3 +163,11 @@ select {
   color: #102033;
   font-weight: 700;
 }
+
+@layer components {
+  .admin-primary { @apply inline-flex h-10 items-center justify-center gap-2 rounded-md bg-gradient-to-r from-ocean-500 to-violet-500 px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-ocean-100; }
+  .admin-secondary { @apply inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-ocean-500 hover:text-ocean-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-ocean-100; }
+  .admin-input { @apply h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-ink outline-none transition focus:border-ocean-500 focus:ring-4 focus:ring-ocean-100 disabled:bg-slate-50 disabled:text-slate-500; }
+  .admin-icon { @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-ocean-500 hover:text-ocean-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-ocean-100; }
+  .admin-page { @apply rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-ocean-500 hover:text-ocean-700 disabled:cursor-not-allowed disabled:opacity-40; }
+}

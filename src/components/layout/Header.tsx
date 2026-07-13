@@ -9,6 +9,7 @@ import { navItems } from "@/lib/navigation";
 export function Header() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  if (pathname.startsWith("/admin")) return null;
   const isActive = (href: string) => href !== "#help" && (pathname === href || pathname.startsWith(`${href}/`));
 
   return (
