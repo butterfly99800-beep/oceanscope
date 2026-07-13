@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  background: #f2f7ff;
+  color: #102033;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+@keyframes atlas-pulse-ring {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.72);
+  }
+
+  70% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+.atlas-pulse {
+  animation: atlas-pulse-ring 1.8s ease-out infinite;
+}
+
+.atlas-vessel-marker {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.atlas-vessel-icon {
+  position: absolute;
+  inset: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #0f2238;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.atlas-vessel-marker:hover .atlas-vessel-icon {
+  background: #244ee6;
+  box-shadow: 0 12px 28px rgba(36, 78, 230, 0.3);
+}
+
+.atlas-vessel-marker.is-selected .atlas-vessel-icon {
+  background: linear-gradient(135deg, #3568ff, #6d5dfc);
+  box-shadow: 0 16px 36px rgba(109, 93, 252, 0.38);
+}
+
+.atlas-vessel-ring {
+  position: absolute;
+  inset: -8px;
+  display: none;
+  border-radius: 999px;
+  background: rgba(109, 93, 252, 0.24);
+}
+
+.atlas-vessel-marker.is-selected .atlas-vessel-ring {
+  display: block;
+  animation: atlas-pulse-ring 1.8s ease-out infinite;
+}
+
+.atlas-vessel-tooltip {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  display: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 6px;
+  background: #08111f;
+  color: #ffffff;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.28);
+}
+
+.atlas-vessel-marker:hover .atlas-vessel-tooltip,
+.atlas-vessel-marker.is-selected .atlas-vessel-tooltip {
+  display: block;
+}
+
+.maplibregl-popup-content {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+  padding: 0;
+  overflow: hidden;
+}
+
+.maplibregl-popup-close-button {
+  color: #64748b;
+  font-size: 18px;
+  padding: 6px 8px;
+}
+
+.atlas-map-popup {
+  min-width: 220px;
+  padding: 14px;
+  color: #334155;
+  font-size: 12px;
+}
+
+.atlas-map-popup-title {
+  margin-bottom: 4px;
+  color: #08111f;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.atlas-map-popup dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  margin: 12px 0 0;
+}
+
+.atlas-map-popup dt {
+  color: #64748b;
+}
+
+.atlas-map-popup dd {
+  margin: 0;
+  color: #102033;
+  font-weight: 700;
+}

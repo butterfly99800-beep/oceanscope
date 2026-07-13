@@ -1,0 +1,10 @@
+﻿import { ArrowRight, CalendarDays } from "lucide-react";
+import type { PortOption } from "@/features/schedules/types";
+
+function port(ports: PortOption[], id: string) {
+  return ports.find((item) => item.id === id);
+}
+
+export function PopularRoutes({ routes, ports, onSelect }: { routes: { id: string; originPortId: string; destinationPortId: string; avgTransitDays: number; weeklySailings: number; directServices: number }[]; ports: PortOption[]; onSelect: (originId: string, destinationId: string) => void }) {
+  return <section className="mt-6"><h2 className="text-lg font-semibold text-ink">热门航线</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{routes.map((route) => { const origin = port(ports, route.originPortId); const destination = port(ports, route.destinationPortId); return <div key={route.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><div className="flex items-start justify-between gap-3"><div><div className="text-base font-semibold text-ink">{origin?.name} <ArrowRight className="mx-1 inline h-4 w-4" aria-hidden="true" /> {destination?.name}</div><p className="mt-1 text-xs text-slate-500">{origin?.code} → {destination?.code}</p></div><CalendarDays className="h-5 w-5 text-ocean-600" aria-hidden="true" /></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm"><div className="rounded-md bg-slate-50 p-2"><b className="block text-ink">{route.avgTransitDays}</b><span className="text-xs text-slate-500">平均天数</span></div><div className="rounded-md bg-slate-50 p-2"><b className="block text-ink">{route.weeklySailings}</b><span className="text-xs text-slate-500">每周班次</span></div><div className="rounded-md bg-slate-50 p-2"><b className="block text-ink">{route.directServices}</b><span className="text-xs text-slate-500">直达服务</span></div></div><button type="button" onClick={() => onSelect(route.originPortId, route.destinationPortId)} className="mt-4 h-10 w-full rounded-md border border-ocean-200 text-sm font-semibold text-ocean-700 hover:bg-ocean-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-ocean-100">查询</button></div>; })}</div></section>;
+}
