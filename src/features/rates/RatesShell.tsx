@@ -64,8 +64,6 @@ export function RatesShell() {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [hasSearched, setHasSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [simulateFailure, setSimulateFailure] = useState(false);
-  const [hasFailure, setHasFailure] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortOption>("recommended");
   const [filters, setFilters] = useState<RateFiltersState>(initialFilters);
@@ -84,13 +82,8 @@ export function RatesShell() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     setIsLoading(true);
-    setHasFailure(false);
     window.setTimeout(() => {
       setIsLoading(false);
-      if (simulateFailure) {
-        setHasFailure(true);
-        return;
-      }
       setHasSearched(true);
       setSelectedId(null);
       setRecentSearches((items) => [{ id: `r-${Date.now()}`, originId: criteria.originId, destinationId: criteria.destinationId, containerSummary: Object.entries(criteria.containers).filter(([, count]) => count > 0).map(([type, count]) => `${count} x ${type}`).join(" · "), date: criteria.cargoReadyDate, dangerous: criteria.cargoType === "dangerous" }, ...items].slice(0, 5));
@@ -103,13 +96,12 @@ export function RatesShell() {
 
   return (
     <PageContainer className="py-6">
-      <PageHeader eyebrow="Rates" title="运费探索器" description="快速查询海运方案、运输时效与费用明细" actions={<label className="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" checked={simulateFailure} onChange={(event) => setSimulateFailure(event.target.checked)} />模拟网络失败</label>} />
+      <PageHeader eyebrow="Rates" title="运费探索器" description="快速查询海运方案、运输时效与费用明细" />
       {savedNotice ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{savedNotice}</div> : null}
 
       {!hasSearched ? (
         <>
           <RateSearchForm criteria={criteria} locations={rateLocations} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={runSearch} />
-          {hasFailure ? <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><b>网络模拟失败。</b> 请稍后重试。<button type="button" onClick={runSearch} className="ml-3 font-semibold underline">重试</button></div> : null}
           <RecentSearches searches={recentSearches} locations={rateLocations} onSelect={fillRecent} onClear={() => setRecentSearches([])} />
           <section className="mt-6 grid gap-4 md:grid-cols-3"><div className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><h3 className="font-semibold text-ink">多承运商报价</h3><p className="mt-2 text-sm text-slate-600">比较多个模拟承运商服务、时效和价格。</p></div><div className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><h3 className="font-semibold text-ink">费用明细透明</h3><p className="mt-2 text-sm text-slate-600">基础运费、起运地、目的地和附加费用分组展示。</p></div><div className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><h3 className="font-semibold text-ink">模拟预订流程</h3><p className="mt-2 text-sm text-slate-600">选择方案、附加服务、确认费用并提交模拟预订。</p></div></section>
         </>
@@ -125,4 +117,5 @@ export function RatesShell() {
     </PageContainer>
   );
 }
+
 
