@@ -28,6 +28,10 @@ model Port {
   originRoutes       Route[]            @relation("RouteOriginPort")
   destinationRoutes  Route[]            @relation("RouteDestinationPort")
   transitRouteLinks  RouteTransitPort[]
+  originSchedules    SailingSchedule[]  @relation("ScheduleOriginPort")
+  destinationSchedules SailingSchedule[] @relation("ScheduleDestinationPort")
+  scheduleTransitLinks ScheduleTransitPort[]
+  scheduleRouteNodes ScheduleRouteNode[]
 
   @@index([country])
   @@index([region])
@@ -44,6 +48,7 @@ model Carrier {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   routes    Route[]
+  schedules SailingSchedule[]
 
   @@index([country])
   @@index([status])
@@ -65,6 +70,7 @@ model Route {
   originPort           Port               @relation("RouteOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
   destinationPort      Port               @relation("RouteDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
   transitPorts         RouteTransitPort[]
+  schedules            SailingSchedule[]
 
   @@index([carrierId])
   @@index([originPortId])
@@ -83,5 +89,107 @@ model RouteTransitPort {
 
   @@unique([routeId, sequence])
   @@unique([routeId, portId])
+  @@index([portId])
+}
+
+enum ScheduleStatus {
+  NORMAL
+  EXPECTED_DELAY
+  DELAYED
+  CUTOFF_SOON
+  CANCELLED
+}
+
+enum ScheduleNodeType {
+  ORIGIN
+  TRANSIT
+  DESTINATION
+}
+
+model SailingSchedule {
+  id                   String                @id @default(cuid())
+  carrierId            String
+  routeId              String?
+  serviceName          String
+  routeName            String
+  vesselName           String                @db.VarChar(80)
+  voyageNumber         String                @db.VarChar(40)
+  originPortId         String
+  destinationPortId    String
+  etd                  DateTime
+  eta                  DateTime
+  transitDays          Int
+  direct               Boolean               @default(false)
+  stopCount            Int                   @default(0)
+  frequency            String
+  originTerminal       String
+  destinationTerminal  String
+  cyOpenTime           DateTime
+  siCutOffTime         DateTime
+  vgmCutOffTime        DateTime
+  customsCutOffTime    DateTime
+  estimatedBerthingTime DateTime
+  departureReliability Int
+  status               ScheduleStatus        @default(NORMAL)
+  delayHours           Int                   @default(0)
+  originalEtd          DateTime?
+  originalEta          DateTime?
+  lastUpdatedAt        DateTime              @default(now())
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  carrier              Carrier               @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  route                Route?                @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  originPort           Port                  @relation("ScheduleOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
+  destinationPort      Port                  @relation("ScheduleDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
+  transitPorts         ScheduleTransitPort[]
+  routeNodes           ScheduleRouteNode[]
+
+  @@unique([carrierId, vesselName, voyageNumber, originPortId, destinationPortId, etd])
+  @@index([carrierId])
+  @@index([routeId])
+  @@index([originPortId])
+  @@index([destinationPortId])
+  @@index([etd])
+  @@index([eta])
+  @@index([status])
+  @@index([vesselName])
+  @@index([voyageNumber])
+}
+
+model ScheduleTransitPort {
+  id            String          @id @default(cuid())
+  scheduleId    String
+  portId        String
+  sequence      Int
+  arrivalTime   DateTime
+  departureTime DateTime
+  waitingHours  Int
+  vesselName    String?  @db.VarChar(80)
+  voyageNumber  String?  @db.VarChar(40)
+  terminal      String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  schedule      SailingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  port          Port            @relation(fields: [portId], references: [id], onDelete: Restrict)
+
+  @@unique([scheduleId, sequence])
+  @@unique([scheduleId, portId])
+  @@index([portId])
+}
+
+model ScheduleRouteNode {
+  id            String           @id @default(cuid())
+  scheduleId    String
+  portId        String
+  sequence      Int
+  nodeType      ScheduleNodeType
+  arrivalTime   DateTime?
+  departureTime DateTime?
+  terminal      String?
+  createdAt     DateTime         @default(now())
+  schedule      SailingSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  port          Port             @relation(fields: [portId], references: [id], onDelete: Restrict)
+
+  @@unique([scheduleId, sequence])
   @@index([portId])
 }

@@ -9,9 +9,9 @@ type DbValue = string | number | boolean | string[];
 type DbRecord = { id: string; status: string; [key: string]: DbValue | undefined };
 type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
 type Option = { label: string; value: string };
-type Field = { key: string; label: string; type: "text" | "number" | "select" | "boolean" | "multi-select"; required?: boolean; options?: Option[]; min?: number; max?: number };
+type Field = { key: string; label: string; type: "text" | "number" | "select" | "boolean" | "multi-select" | "datetime-local"; required?: boolean; options?: Option[]; min?: number; max?: number };
 type Column = { key: string; label: string; type?: "badge" };
-type ResourceKind = "ports" | "carriers" | "routes";
+type ResourceKind = "ports" | "carriers" | "routes" | "schedules";
 type ApiListResponse = { data: DbRecord[]; pagination: Pagination };
 type ApiItemResponse = { data: DbRecord };
 type ApiErrorResponse = { error: { code: string; message: string } };
@@ -35,7 +35,8 @@ const statusOptions: Option[] = [
 
 function statusLabel(value: DbValue | undefined): AdminStatus {
   const label = text(value);
-  return label === "停用" ? "停用" : "启用";
+  if (["停用", "维护中", "待确认", "已确认", "已取消", "正常", "预计延误", "已延误", "即将截关"].includes(label)) return label as AdminStatus;
+  return "启用";
 }
 
 function text(value: DbValue | undefined) {
@@ -54,7 +55,7 @@ function normalizeRecord(record: DbRecord, fields: Field[]) {
   return next;
 }
 
-function buildConfig(kind: ResourceKind, carrierOptions: Option[], portOptions: Option[]): ResourceConfig {
+function buildConfig(kind: ResourceKind, carrierOptions: Option[], portOptions: Option[], routeOptions: Option[]): ResourceConfig {
   if (kind === "ports") return {
     title: "港口管理",
     description: "维护港口基础资料、UN/LOCODE、国家地区与经纬度。",
@@ -99,6 +100,46 @@ function buildConfig(kind: ResourceKind, carrierOptions: Option[], portOptions: 
       { key: "code", label: "公司代码", type: "text", required: true },
       { key: "country", label: "国家", type: "text", required: true },
       { key: "status", label: "状态", type: "select", options: statusOptions },
+    ],
+  };
+  if (kind === "schedules") return {
+    title: "船期管理",
+    description: "维护数据库船期、船名航次、ETD/ETA、关键节点和状态。",
+    addLabel: "新增船期",
+    endpoint: "/api/admin/schedules",
+    searchPlaceholder: "搜索船名、航次、Service 或航线名称",
+    categoryLabel: "状态筛选",
+    categoryKey: "status",
+    columns: [
+      { key: "carrier", label: "船公司" }, { key: "serviceName", label: "Service" }, { key: "vesselName", label: "船名" }, { key: "voyageNumber", label: "航次" },
+      { key: "originPort", label: "起运港" }, { key: "destinationPort", label: "目的港" }, { key: "etd", label: "ETD" }, { key: "eta", label: "ETA" },
+      { key: "transitPorts", label: "中转港" }, { key: "transitDays", label: "航程天数" }, { key: "status", label: "状态", type: "badge" }, { key: "updatedAt", label: "更新时间" },
+    ],
+    fields: [
+      { key: "carrierId", label: "船公司", type: "select", required: true, options: carrierOptions },
+      { key: "routeId", label: "关联航线", type: "select", options: routeOptions },
+      { key: "serviceName", label: "Service", type: "text", required: true },
+      { key: "routeName", label: "航线名称", type: "text", required: true },
+      { key: "vesselName", label: "船名", type: "text", required: true },
+      { key: "voyageNumber", label: "航次", type: "text", required: true },
+      { key: "originPortId", label: "起运港", type: "select", required: true, options: portOptions },
+      { key: "destinationPortId", label: "目的港", type: "select", required: true, options: portOptions },
+      { key: "transitPortIds", label: "中转港", type: "multi-select", options: portOptions },
+      { key: "etd", label: "ETD", type: "datetime-local", required: true },
+      { key: "eta", label: "ETA", type: "datetime-local", required: true },
+      { key: "transitDays", label: "航程天数", type: "number", required: true, min: 1 },
+      { key: "direct", label: "直达", type: "boolean" },
+      { key: "frequency", label: "班期频率", type: "text", required: true },
+      { key: "originTerminal", label: "起运码头", type: "text", required: true },
+      { key: "destinationTerminal", label: "目的码头", type: "text", required: true },
+      { key: "cyOpenTime", label: "开港时间", type: "datetime-local", required: true },
+      { key: "siCutOffTime", label: "截单时间", type: "datetime-local", required: true },
+      { key: "vgmCutOffTime", label: "VGM 截止", type: "datetime-local", required: true },
+      { key: "customsCutOffTime", label: "截关时间", type: "datetime-local", required: true },
+      { key: "estimatedBerthingTime", label: "预计靠泊", type: "datetime-local", required: true },
+      { key: "departureReliability", label: "准班率", type: "number", required: true, min: 0, max: 100 },
+      { key: "status", label: "船期状态", type: "select", options: [{ label: "正常", value: "正常" }, { label: "预计延误", value: "预计延误" }, { label: "已延误", value: "已延误" }, { label: "即将截关", value: "即将截关" }, { label: "已取消", value: "已取消" }] },
+      { key: "delayHours", label: "延误小时数", type: "number", min: 0 },
     ],
   };
   return {
@@ -151,23 +192,29 @@ export function AdminDatabaseResourcePage({ resource }: { resource: ResourceKind
   const [deleteTarget, setDeleteTarget] = useState<DbRecord | null>(null);
   const [carrierOptions, setCarrierOptions] = useState<Option[]>([]);
   const [portOptions, setPortOptions] = useState<Option[]>([]);
-  const config = useMemo(() => buildConfig(resource, carrierOptions, portOptions), [carrierOptions, portOptions, resource]);
+  const [routeOptions, setRouteOptions] = useState<Option[]>([]);
+  const config = useMemo(() => buildConfig(resource, carrierOptions, portOptions, routeOptions), [carrierOptions, portOptions, resource, routeOptions]);
 
   const categories = useMemo(() => Array.from(new Set(records.map((item) => text(config.categoryKey ? item[config.categoryKey] : undefined)).filter(Boolean))), [config.categoryKey, records]);
 
   const loadOptions = useCallback(async () => {
-    if (resource !== "routes") return;
-    const [portsResponse, carriersResponse] = await Promise.all([
+    if (resource !== "routes" && resource !== "schedules") return;
+    const [portsResponse, carriersResponse, routesResponse] = await Promise.all([
       fetch("/api/admin/ports?pageSize=100"),
       fetch("/api/admin/carriers?pageSize=100"),
+      fetch("/api/admin/routes?pageSize=100"),
     ]);
     const portsPayload = await parseResponse(portsResponse);
     const carriersPayload = await parseResponse(carriersResponse);
+    const routesPayload = await parseResponse(routesResponse);
     if (portsPayload.ok && "pagination" in portsPayload.payload) {
       setPortOptions(portsPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} (${text(item.locode)})` })));
     }
     if (carriersPayload.ok && "pagination" in carriersPayload.payload) {
       setCarrierOptions(carriersPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} (${text(item.code)})` })));
+    }
+    if (routesPayload.ok && "pagination" in routesPayload.payload) {
+      setRouteOptions(routesPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} · ${text(item.serviceName)}` })));
     }
   }, [resource]);
 
@@ -266,5 +313,9 @@ function DbFormDrawer({ config, mode, record, onClose, onSave }: { config: Resou
 }
 
 function ConfirmDialog({ title, message, onCancel, onConfirm }: { title: string; message: string; onCancel: () => void; onConfirm: () => void }) { return <div className="fixed inset-0 z-[2300] flex items-center justify-center bg-ink/45 p-4"><div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"><h3 className="text-lg font-semibold text-ink">{title}</h3><p className="mt-2 text-sm text-slate-600">{message}</p><div className="mt-5 flex justify-end gap-2"><button onClick={onCancel} className="admin-secondary">取消</button><button onClick={onConfirm} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">删除</button></div></div></div>; }
+
+
+
+
 
 

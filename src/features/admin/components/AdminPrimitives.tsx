@@ -7,6 +7,10 @@ const styles: Record<AdminStatus, string> = {
   待确认: "bg-amber-50 text-amber-700 ring-amber-200",
   已确认: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   已取消: "bg-rose-50 text-rose-700 ring-rose-200",
+  正常: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  预计延误: "bg-amber-50 text-amber-700 ring-amber-200",
+  已延误: "bg-rose-50 text-rose-700 ring-rose-200",
+  即将截关: "bg-violet-50 text-violet-700 ring-violet-200",
 };
 
 export function AdminStatusBadge({ status }: { status: AdminStatus }) {
@@ -20,3 +24,4 @@ export function AdminStatCard({ label, value }: { label: string; value: number |
 export function AdminEmptyState({ title = "暂无数据", description }: { title?: string; description?: string }) {
   return <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500"><div>{title}</div>{description ? <p className="mt-2 text-sm">{description}</p> : null}</div>;
 }
+

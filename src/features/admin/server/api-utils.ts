@@ -8,6 +8,7 @@ export type ApiErrorCode =
   | "PORT_NOT_FOUND"
   | "CARRIER_NOT_FOUND"
   | "ROUTE_NOT_FOUND"
+  | "SCHEDULE_NOT_FOUND"
   | "CONFLICT"
   | "DELETE_BLOCKED"
   | "DATABASE_ERROR"
@@ -107,5 +108,6 @@ export const routeSchema = z.object({
 export function validationError(error: z.ZodError) {
   return jsonError("BAD_REQUEST", error.issues[0]?.message ?? "参数格式错误", 400);
 }
+
 
 
