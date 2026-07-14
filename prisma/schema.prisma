@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Port {
+  id                 String             @id @default(cuid())
+  name               String
+  nameZh             String?
+  locode             String             @unique
+  country            String
+  countryCode        String?
+  region             String
+  latitude           Float?
+  longitude          Float?
+  status             RecordStatus       @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  originRoutes       Route[]            @relation("RouteOriginPort")
+  destinationRoutes  Route[]            @relation("RouteDestinationPort")
+  transitRouteLinks  RouteTransitPort[]
+
+  @@index([country])
+  @@index([region])
+  @@index([status])
+}
+
+model Carrier {
+  id        String       @id @default(cuid())
+  name      String
+  nameZh    String?
+  code      String       @unique
+  country   String
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  routes    Route[]
+
+  @@index([country])
+  @@index([status])
+}
+
+model Route {
+  id                   String             @id @default(cuid())
+  name                 String
+  serviceName          String
+  carrierId            String
+  originPortId         String
+  destinationPortId    String
+  direct               Boolean            @default(false)
+  averageTransitDays   Int
+  status               RecordStatus       @default(ACTIVE)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  carrier              Carrier            @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  originPort           Port               @relation("RouteOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
+  destinationPort      Port               @relation("RouteDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
+  transitPorts         RouteTransitPort[]
+
+  @@index([carrierId])
+  @@index([originPortId])
+  @@index([destinationPortId])
+  @@index([status])
+}
+
+model RouteTransitPort {
+  id        String   @id @default(cuid())
+  routeId   String
+  portId    String
+  sequence  Int
+  createdAt DateTime @default(now())
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  port      Port     @relation(fields: [portId], references: [id], onDelete: Restrict)
+
+  @@unique([routeId, sequence])
+  @@unique([routeId, portId])
+  @@index([portId])
+}

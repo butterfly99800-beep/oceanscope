@@ -1,6 +1,5 @@
-﻿import { AdminResourcePage } from "@/features/admin/components/AdminResourcePage";
-import { resourceConfigs } from "@/features/admin/data/mock-admin-data";
+﻿import { AdminDatabaseResourcePage } from "@/features/admin/components/AdminDatabaseResourcePage";
 
-export default function AdminroutesPage() {
-  return <AdminResourcePage config={resourceConfigs.routes} />;
+export default function AdminRoutesPage() {
+  return <AdminDatabaseResourcePage resource="routes" />;
 }

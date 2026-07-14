@@ -75,3 +75,44 @@ npm run start
 - 不要提交 `node_modules`、`.next`、`.env.local`、日志和临时缓存文件。
 - MapLibre 只在客户端动态加载，避免 SSR 阶段访问浏览器 API。
 - localStorage 相关逻辑仅在客户端访问，并带有安全回退。
+
+## MySQL 与 Prisma
+
+后台管理中的港口管理、船公司管理、航线管理已预留 MySQL + Prisma ORM 接入。本阶段不把数据库账号或密码写入源码。
+
+### 环境变量
+
+复制 `.env.example` 为 `.env`，并填写真实 MySQL 连接地址：
+
+```env
+DATABASE_URL="mysql://USER:PASSWORD@127.0.0.1:3306/oceanscope"
+```
+
+可以连接本地 MySQL，也可以连接云 MySQL。请不要提交 `.env`、`.env.local` 或任何包含真实密码的文件。
+
+### Prisma 命令
+
+```bash
+npm run db:generate
+npm run db:migrate -- --name init_core_data
+npm run db:seed
+npm run db:studio
+```
+
+也可以直接使用：
+
+```bash
+npx prisma validate
+npx prisma generate
+npx prisma migrate dev --name init_core_data
+npx prisma db seed
+```
+
+### 当前数据库化模块
+
+- `/admin/ports`：港口管理，读取 `/api/admin/ports`
+- `/admin/carriers`：船公司管理，读取 `/api/admin/carriers`
+- `/admin/routes`：航线管理，读取 `/api/admin/routes`
+
+其他模块仍保留本地模拟数据，后续再逐步接入数据库。
+
