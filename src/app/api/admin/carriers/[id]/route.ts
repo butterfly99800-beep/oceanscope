@@ -39,8 +39,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const [linkedRoutes, linkedSchedules, linkedRates] = await Promise.all([prisma.route.count({ where: { carrierId: id } }), prisma.sailingSchedule.count({ where: { carrierId: id } }), prisma.rateQuote.count({ where: { carrierId: id } })]);
-    if (linkedRoutes > 0 || linkedSchedules > 0 || linkedRates > 0) return jsonError("DELETE_BLOCKED", "该船公司已被航线、船期或运价引用，请先处理关联数据", 409);
+    const [linkedRoutes, linkedSchedules, linkedRates, linkedOrders] = await Promise.all([prisma.route.count({ where: { carrierId: id } }), prisma.sailingSchedule.count({ where: { carrierId: id } }), prisma.rateQuote.count({ where: { carrierId: id } }), prisma.bookingOrder.count({ where: { carrierId: id } })]);
+    if (linkedRoutes > 0 || linkedSchedules > 0 || linkedRates > 0 || linkedOrders > 0) return jsonError("DELETE_BLOCKED", "该船公司已被航线、船期或运价引用，请先处理关联数据", 409);
     await prisma.carrier.delete({ where: { id } });
     return jsonData({ id });
   } catch (error) {

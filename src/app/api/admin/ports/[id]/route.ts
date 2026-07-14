@@ -27,12 +27,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const [linkedRoutes, linkedSchedules, linkedRates] = await Promise.all([
+    const [linkedRoutes, linkedSchedules, linkedRates, linkedOrders] = await Promise.all([
       prisma.route.count({ where: { OR: [{ originPortId: id }, { destinationPortId: id }, { transitPorts: { some: { portId: id } } }] } }),
       prisma.sailingSchedule.count({ where: { OR: [{ originPortId: id }, { destinationPortId: id }, { transitPorts: { some: { portId: id } } }, { routeNodes: { some: { portId: id } } }] } }),
       prisma.rateQuote.count({ where: { OR: [{ originPortId: id }, { destinationPortId: id }] } }),
+      prisma.bookingOrder.count({ where: { OR: [{ originPortId: id }, { destinationPortId: id }] } }),
     ]);
-    if (linkedRoutes > 0 || linkedSchedules > 0 || linkedRates > 0) return jsonError("DELETE_BLOCKED", "This port is referenced by routes, schedules or rates.", 409);
+    if (linkedRoutes > 0 || linkedSchedules > 0 || linkedRates > 0 || linkedOrders > 0) return jsonError("DELETE_BLOCKED", "This port is referenced by routes, schedules or rates.", 409);
     await prisma.port.delete({ where: { id } });
     return jsonData({ id });
   } catch (error) { return handlePrismaError(error); }

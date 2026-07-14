@@ -29,6 +29,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const linkedOrders = await prisma.bookingOrder.count({ where: { rateQuoteId: id } });
+    if (linkedOrders > 0) return jsonError("DELETE_BLOCKED", "This rate quote is referenced by booking orders.", 409);
     await prisma.rateQuote.delete({ where: { id } });
     return jsonData({ id });
   } catch (error) { return handlePrismaError(error); }

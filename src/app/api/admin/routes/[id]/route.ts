@@ -51,8 +51,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const [linkedSchedules, linkedRates] = await Promise.all([prisma.sailingSchedule.count({ where: { routeId: id } }), prisma.rateQuote.count({ where: { routeId: id } })]);
-    if (linkedSchedules > 0 || linkedRates > 0) return jsonError("DELETE_BLOCKED", "This route is referenced by schedules or rates.", 409);
+    const [linkedSchedules, linkedRates, linkedOrders] = await Promise.all([prisma.sailingSchedule.count({ where: { routeId: id } }), prisma.rateQuote.count({ where: { routeId: id } }), prisma.bookingOrder.count({ where: { routeId: id } })]);
+    if (linkedSchedules > 0 || linkedRates > 0 || linkedOrders > 0) return jsonError("DELETE_BLOCKED", "This route is referenced by schedules or rates.", 409);
     await prisma.route.delete({ where: { id } });
     return jsonData({ id });
   } catch (error) { return handlePrismaError(error); }

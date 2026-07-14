@@ -1,4 +1,4 @@
-﻿export type BookingStatus = "待确认" | "已确认" | "已取消";
+﻿export type BookingStatus = string;
 export type OrderTimelineItem = { title: string; description: string; timestamp: string };
 export type OrderRoute = { origin: string; destination: string; originPortCode: string; destinationPortCode: string; etd: string; eta: string; transitDays: number; stops: number };
 export type OrderCargo = { cargoType: "general" | "dangerous"; readyDate: string; containerSelections: Record<string, number> };

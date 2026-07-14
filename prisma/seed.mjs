@@ -150,10 +150,50 @@ async function seedRateQuotes() {
   }
 }
 
+
+async function seedBookingOrders() {
+  const quotes = await prisma.rateQuote.findMany({ include: { lineItems: true, carrier: true, originPort: true, destinationPort: true, route: true }, orderBy: { createdAt: "asc" } });
+  const usable = quotes.filter((quote) => quote.status === "ACTIVE").slice(0, 8);
+  const statuses = ["PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED", "COMPLETED", "PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED", "COMPLETED"];
+  for (const [index, quote] of usable.entries()) {
+    const bookingNumber = 'OCS-20260714-' + String(index + 1).padStart(4, '0');
+    const quantity = (index % 2) + 1;
+    const subtotal = money(Number(quote.totalBasePrice) * quantity + 85 + (index % 3) * 120);
+    const tax = money(subtotal * 0.085);
+    const total = money(subtotal + tax);
+    const order = await prisma.bookingOrder.upsert({
+      where: { bookingNumber },
+      update: { status: statuses[index], subtotal, tax, total, updatedAt: new Date() },
+      create: { bookingNumber, status: statuses[index], originPortId: quote.originPortId, destinationPortId: quote.destinationPortId, carrierId: quote.carrierId, routeId: quote.routeId, rateQuoteId: quote.id, serviceName: quote.serviceName, transportMode: quote.transportMode, cargoType: index % 3 === 0 ? 'dangerous' : 'general', readyDate: date('2026-07-14T00:00:00Z'), vesselName: quote.vesselName, voyageNumber: quote.voyageNumber, etd: quote.etd, eta: quote.eta, transitDays: quote.transitDays, stopCount: quote.stopCount, currency: quote.currency, subtotal, tax, total, quoteValidUntil: quote.validUntil, confirmedAt: statuses[index] === 'CONFIRMED' || statuses[index] === 'COMPLETED' ? new Date() : null, cancelledAt: statuses[index] === 'CANCELLED' ? new Date() : null },
+    });
+    await prisma.bookingContainer.deleteMany({ where: { orderId: order.id } });
+    await prisma.bookingService.deleteMany({ where: { orderId: order.id } });
+    await prisma.bookingCostItem.deleteMany({ where: { orderId: order.id } });
+    await prisma.bookingTimeline.deleteMany({ where: { orderId: order.id } });
+    await prisma.bookingContainer.create({ data: { orderId: order.id, containerType: quote.containerType, quantity, unitPrice: quote.totalBasePrice, subtotal: money(Number(quote.totalBasePrice) * quantity) } });
+    await prisma.bookingService.createMany({ data: [
+      { orderId: order.id, code: 'EXPORT_CUSTOMS', name: 'Export Customs Clearance', quantity: 1, unitPrice: 120, subtotal: 120 },
+      ...(index % 2 === 0 ? [{ orderId: order.id, code: 'INSURANCE_BASIC', name: 'Insurance', quantity: 1, unitPrice: 260, subtotal: 260 }] : []),
+    ] });
+    await prisma.bookingCostItem.createMany({ data: [
+      { orderId: order.id, category: 'Base', code: 'OCEAN_FREIGHT', name: 'Ocean Freight', quantity, unitPrice: quote.baseFreight, subtotal: money(Number(quote.baseFreight) * quantity), currency: quote.currency },
+      { orderId: order.id, category: 'Surcharge', code: 'FUEL', name: 'Fuel Surcharge', quantity: 1, unitPrice: quote.fuelSurcharge, subtotal: quote.fuelSurcharge, currency: quote.currency },
+      { orderId: order.id, category: 'Origin', code: 'EXPORT_CUSTOMS', name: 'Export Customs Clearance', quantity: 1, unitPrice: 120, subtotal: 120, currency: quote.currency },
+      { orderId: order.id, category: 'Other', code: 'TAX_SNAPSHOT', name: 'Tax Snapshot', quantity: 1, unitPrice: tax, subtotal: tax, currency: quote.currency },
+    ] });
+    const now = new Date();
+    await prisma.bookingTimeline.createMany({ data: [
+      { orderId: order.id, status: 'PENDING_CONFIRMATION', title: 'Booking submitted', description: 'Seed booking was submitted.', occurredAt: now },
+      { orderId: order.id, status: statuses[index], title: 'Current status: ' + statuses[index], description: 'Seed status snapshot.', occurredAt: now },
+    ] });
+  }
+}
+
 async function main() {
   await seedCore();
   await seedSchedules();
   await seedRateQuotes();
+  await seedBookingOrders();
 }
 
 main().then(async () => prisma.$disconnect()).catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });

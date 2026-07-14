@@ -87,7 +87,7 @@ export function mapAdminRate(quote: RateQuoteWithRelations) {
   };
 }
 
-export function mapRateOption(quote: RateQuoteWithRelations, override?: { id?: string; baseFreight?: number; surcharges?: number; totalPrice?: number; fixedLineItems?: CostLineItem[]; tags?: RateTag[] }): RateOption {
+export function mapRateOption(quote: RateQuoteWithRelations, override?: { id?: string; baseFreight?: number; surcharges?: number; totalPrice?: number; fixedLineItems?: CostLineItem[]; tags?: RateTag[]; rateQuoteIds?: string[] }): RateOption {
   const lineItems = override?.fixedLineItems ?? quote.lineItems.map((item) => ({
     category: categoryLabels[item.category],
     name: item.name,
@@ -123,6 +123,11 @@ export function mapRateOption(quote: RateQuoteWithRelations, override?: { id?: s
     tags: override?.tags ?? tagsFor(quote),
     fixedLineItems: lineItems,
     expired: quote.status === "EXPIRED" || quote.validUntil.getTime() < Date.now(),
+    rateQuoteIds: override?.rateQuoteIds ?? [quote.id],
+    carrierId: quote.carrierId,
+    routeId: quote.routeId,
+    originPortId: quote.originPortId,
+    destinationPortId: quote.destinationPortId,
   };
 }
 

@@ -39,6 +39,11 @@ export type RateOption = {
   tags: RateTag[];
   fixedLineItems?: CostLineItem[];
   expired?: boolean;
+  rateQuoteIds?: string[];
+  carrierId?: string;
+  routeId?: string | null;
+  originPortId?: string;
+  destinationPortId?: string;
 };
 
 export type RateFiltersState = { stops: "all" | "direct" | "one" | "two"; carriers: string[]; maxPrice: number; maxTransitDays: number; minFreeDays: number; minReliability: number; departureFrom: string };

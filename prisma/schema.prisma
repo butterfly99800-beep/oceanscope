@@ -34,6 +34,8 @@ model Port {
   scheduleRouteNodes   ScheduleRouteNode[]
   originRateQuotes     RateQuote[]        @relation("RateOriginPort")
   destinationRateQuotes RateQuote[]       @relation("RateDestinationPort")
+  originBookingOrders   BookingOrder[]     @relation("BookingOriginPort")
+  destinationBookingOrders BookingOrder[]   @relation("BookingDestinationPort")
 
   @@index([country])
   @@index([region])
@@ -52,6 +54,7 @@ model Carrier {
   routes    Route[]
   schedules SailingSchedule[]
   rateQuotes RateQuote[]
+  bookingOrders BookingOrder[]
 
   @@index([country])
   @@index([status])
@@ -75,6 +78,7 @@ model Route {
   transitPorts         RouteTransitPort[]
   schedules            SailingSchedule[]
   rateQuotes           RateQuote[]
+  bookingOrders        BookingOrder[]
 
   @@index([carrierId])
   @@index([originPortId])
@@ -262,6 +266,7 @@ model RateQuote {
   originPort              Port            @relation("RateOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
   destinationPort         Port            @relation("RateDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
   lineItems               RateLineItem[]
+  bookingOrders           BookingOrder[]
 
   @@unique([carrierId, originPortId, destinationPortId, serviceName, containerType, effectiveFrom, validUntil])
   @@index([carrierId])
@@ -293,4 +298,120 @@ model RateLineItem {
 
   @@index([rateQuoteId])
   @@index([category])
+}
+
+enum BookingStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model BookingOrder {
+  id                String            @id @default(cuid())
+  bookingNumber     String            @unique @db.VarChar(32)
+  status            BookingStatus     @default(PENDING_CONFIRMATION)
+  customerName      String?           @db.VarChar(120)
+  customerEmail     String?           @db.VarChar(160)
+  customerPhone     String?           @db.VarChar(60)
+  originPortId      String
+  destinationPortId String
+  carrierId         String
+  routeId           String?
+  rateQuoteId       String?
+  serviceName       String            @db.VarChar(80)
+  transportMode     TransportMode     @default(FCL)
+  cargoType         String            @db.VarChar(40)
+  readyDate         DateTime
+  vesselName        String            @db.VarChar(80)
+  voyageNumber      String            @db.VarChar(40)
+  etd               DateTime
+  eta               DateTime
+  transitDays       Int
+  stopCount         Int               @default(0)
+  currency          String            @db.VarChar(3)
+  subtotal          Decimal           @db.Decimal(12, 2)
+  tax               Decimal           @db.Decimal(12, 2)
+  total             Decimal           @db.Decimal(12, 2)
+  quoteValidUntil   DateTime
+  notes             String?           @db.Text
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  confirmedAt       DateTime?
+  cancelledAt       DateTime?
+  originPort        Port              @relation("BookingOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
+  destinationPort   Port              @relation("BookingDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
+  carrier           Carrier           @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  route             Route?            @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  rateQuote         RateQuote?        @relation(fields: [rateQuoteId], references: [id], onDelete: Restrict)
+  containers        BookingContainer[]
+  services          BookingService[]
+  costItems         BookingCostItem[]
+  timeline          BookingTimeline[]
+
+  @@index([status])
+  @@index([originPortId])
+  @@index([destinationPortId])
+  @@index([carrierId])
+  @@index([routeId])
+  @@index([rateQuoteId])
+  @@index([createdAt])
+}
+
+model BookingContainer {
+  id            String        @id @default(cuid())
+  orderId       String
+  containerType ContainerType
+  quantity      Int
+  unitPrice     Decimal       @db.Decimal(12, 2)
+  subtotal      Decimal       @db.Decimal(12, 2)
+  createdAt     DateTime      @default(now())
+  order         BookingOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model BookingService {
+  id          String        @id @default(cuid())
+  orderId     String
+  code        String        @db.VarChar(60)
+  name        String        @db.VarChar(120)
+  description String?       @db.VarChar(255)
+  quantity    Int
+  unitPrice   Decimal       @db.Decimal(12, 2)
+  subtotal    Decimal       @db.Decimal(12, 2)
+  createdAt   DateTime      @default(now())
+  order       BookingOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model BookingCostItem {
+  id        String        @id @default(cuid())
+  orderId   String
+  category  String        @db.VarChar(80)
+  code      String        @db.VarChar(60)
+  name      String        @db.VarChar(120)
+  quantity  Int
+  unitPrice Decimal       @db.Decimal(12, 2)
+  subtotal  Decimal       @db.Decimal(12, 2)
+  currency  String        @db.VarChar(3)
+  createdAt DateTime      @default(now())
+  order     BookingOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model BookingTimeline {
+  id          String        @id @default(cuid())
+  orderId     String
+  status      BookingStatus
+  title       String        @db.VarChar(120)
+  description String?       @db.VarChar(255)
+  occurredAt  DateTime
+  createdAt   DateTime      @default(now())
+  order       BookingOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
 }

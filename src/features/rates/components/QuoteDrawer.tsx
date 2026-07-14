@@ -6,74 +6,60 @@ import { AdditionalServices } from "@/features/rates/components/AdditionalServic
 import { BookingConfirmation } from "@/features/rates/components/BookingConfirmation";
 import { CostBreakdown } from "@/features/rates/components/CostBreakdown";
 import { QuoteStepper } from "@/features/rates/components/QuoteStepper";
-import { generateBookingNumber, getOrders, saveOrder } from "@/features/orders/lib/orderStorage";
 import type { BookingOrder } from "@/features/orders/types";
 import { calculateQuote, formatMoney } from "@/features/rates/lib/calculateQuote";
 import type { AdditionalServicesState, ContainerSelection, RateOption } from "@/features/rates/types";
-
-function selectedServiceLabels(services: AdditionalServicesState) {
-  const labels: string[] = [];
-  if (services.exportCustoms) labels.push("出口报关");
-  if (services.importCustoms) labels.push("进口清关");
-  if (services.pickup) labels.push("拖车提货");
-  if (services.delivery) labels.push("目的港配送");
-  return labels;
-}
 
 export function QuoteDrawer({ isOpen, option, containers, isDangerous, readyDate, services, onServicesChange, onClose, onBackToResults, onOrderSaved }: { isOpen: boolean; option: RateOption | null; containers: ContainerSelection; isDangerous: boolean; readyDate: string; services: AdditionalServicesState; onServicesChange: (services: AdditionalServicesState) => void; onClose: () => void; onBackToResults: () => void; onOrderSaved: (order: BookingOrder) => void }) {
   const [step, setStep] = useState(0);
   const [order, setOrder] = useState<BookingOrder | null>(null);
   const [saveError, setSaveError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const calculation = useMemo(() => option ? calculateQuote({ option, containers, isDangerous, services }) : null, [containers, isDangerous, option, services]);
 
   if (!isOpen || !option || !calculation) return null;
 
-  const submit = () => {
-    const now = new Date();
-    const bookingNumber = generateBookingNumber(getOrders(), now);
-    const nextOrder: BookingOrder = {
-      orderId: crypto.randomUUID(),
-      bookingNumber,
-      createdAt: now.toISOString(),
-      status: "待确认",
-      origin: option.origin,
-      destination: option.destination,
-      originPortCode: option.originPortCode,
-      destinationPortCode: option.destinationPortCode,
-      carrier: option.carrier,
-      serviceName: option.serviceName,
-      transportMode: option.transportMode,
-      vesselName: option.vesselName,
-      voyageNumber: option.voyageNumber,
-      etd: option.etd,
-      eta: option.eta,
-      transitDays: option.transitDays,
-      stops: option.stops,
-      containerSelections: containers,
-      cargoType: isDangerous ? "dangerous" : "general",
-      readyDate,
-      selectedAdditionalServices: selectedServiceLabels(services),
-      insuranceOption: services.insurance,
-      additionalFreeDays: services.freeDays,
-      costLineItems: calculation.lineItems,
-      subtotal: calculation.subtotal,
-      tax: calculation.tax,
-      total: calculation.total,
-      currency: calculation.currency,
-      quoteValidUntil: option.validUntil,
-      timeline: [
-        { title: "模拟预订已提交", description: "订单已保存到本地浏览器。", timestamp: now.toISOString() },
-        { title: "等待平台确认", description: "当前阶段不会发送真实订舱请求。", timestamp: now.toISOString() },
-      ],
-    };
-    const result = saveOrder(nextOrder);
-    if (!result.ok) {
-      setSaveError(result.message);
+  const submit = async () => {
+    if (isSubmitting || !option.rateQuoteIds?.length || !option.carrierId || !option.originPortId || !option.destinationPortId) {
+      setSaveError("Rate quote metadata is missing. Please search rates again.");
       return;
     }
-    setOrder(result.order);
-    onOrderSaved(result.order);
-    setStep(3);
+    setIsSubmitting(true);
+    setSaveError("");
+    try {
+      const response = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rateOptionId: option.id,
+          rateQuoteIds: option.rateQuoteIds,
+          originPortId: option.originPortId,
+          destinationPortId: option.destinationPortId,
+          carrierId: option.carrierId,
+          routeId: option.routeId,
+          readyDate,
+          cargoType: isDangerous ? "dangerous" : "general",
+          containers: Object.entries(containers).filter(([, quantity]) => quantity > 0).map(([type, quantity]) => ({ type, quantity })),
+          services,
+          subtotal: calculation.subtotal,
+          tax: calculation.tax,
+          total: calculation.total,
+          currency: calculation.currency,
+        }),
+      });
+      const payload = await response.json() as { data?: BookingOrder; error?: { message: string } };
+      if (!response.ok || !payload.data) {
+        setSaveError(payload.error?.message ?? "Booking submission failed. Please retry.");
+        return;
+      }
+      setOrder(payload.data);
+      onOrderSaved(payload.data);
+      setStep(3);
+    } catch {
+      setSaveError("Booking API is unavailable. Please retry.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -87,7 +73,7 @@ export function QuoteDrawer({ isOpen, option, containers, isDangerous, readyDate
           {step === 2 ? <CostBreakdown calculation={calculation} /> : null}
           {step === 3 ? <BookingConfirmation order={order} option={option} containers={containers} calculation={calculation} onBack={() => { onBackToResults(); onClose(); }} /> : null}
         </main>
-        {step < 3 ? <footer className="border-t border-slate-200 p-5"><div className="flex items-center justify-between gap-3"><div><span className="text-sm text-slate-500">实时总价</span><div className="text-2xl font-semibold text-ink">{formatMoney(calculation.total)}</div></div><div className="flex gap-2"><button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:border-ocean-500 hover:text-ocean-700">上一步</button><button type="button" onClick={() => step === 2 ? submit() : setStep((value) => value + 1)} className="h-10 rounded-md bg-gradient-to-r from-ocean-500 to-violet-500 px-4 text-sm font-semibold text-white hover:brightness-110">{step === 2 ? "提交模拟预订" : "下一步"}</button></div></div></footer> : null}
+        {step < 3 ? <footer className="border-t border-slate-200 p-5"><div className="flex items-center justify-between gap-3"><div><span className="text-sm text-slate-500">实时总价</span><div className="text-2xl font-semibold text-ink">{formatMoney(calculation.total)}</div></div><div className="flex gap-2"><button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:border-ocean-500 hover:text-ocean-700">上一步</button><button type="button" onClick={() => step === 2 ? void submit() : setStep((value) => value + 1)} disabled={isSubmitting} className="h-10 rounded-md bg-gradient-to-r from-ocean-500 to-violet-500 px-4 text-sm font-semibold text-white hover:brightness-110">{step === 2 ? "提交模拟预订" : "下一步"}</button></div></div></footer> : null}
       </aside>
     </div>
   );
