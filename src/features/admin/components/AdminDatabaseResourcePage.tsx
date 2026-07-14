@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Download, Eye, FileUp, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -11,38 +11,26 @@ type Pagination = { page: number; pageSize: number; total: number; totalPages: n
 type Option = { label: string; value: string };
 type Field = { key: string; label: string; type: "text" | "number" | "select" | "boolean" | "multi-select" | "datetime-local"; required?: boolean; options?: Option[]; min?: number; max?: number };
 type Column = { key: string; label: string; type?: "badge" };
-type ResourceKind = "ports" | "carriers" | "routes" | "schedules";
+type ResourceKind = "ports" | "carriers" | "routes" | "schedules" | "rates";
 type ApiListResponse = { data: DbRecord[]; pagination: Pagination };
 type ApiItemResponse = { data: DbRecord };
 type ApiErrorResponse = { error: { code: string; message: string } };
 
-type ResourceConfig = {
-  title: string;
-  description: string;
-  addLabel: string;
-  endpoint: string;
-  searchPlaceholder: string;
-  categoryLabel: string;
-  categoryKey?: string;
-  columns: Column[];
-  fields: Field[];
-};
+type ResourceConfig = { title: string; description: string; addLabel: string; endpoint: string; searchPlaceholder: string; categoryKey?: string; columns: Column[]; fields: Field[] };
 
-const statusOptions: Option[] = [
-  { label: "启用", value: "启用" },
-  { label: "停用", value: "停用" },
-];
-
-function statusLabel(value: DbValue | undefined): AdminStatus {
-  const label = text(value);
-  if (["停用", "维护中", "待确认", "已确认", "已取消", "正常", "预计延误", "已延误", "即将截关"].includes(label)) return label as AdminStatus;
-  return "启用";
-}
+const statusOptions: Option[] = [{ label: "Active", value: "启用" }, { label: "Inactive", value: "停用" }, { label: "Expired", value: "已过期" }];
+const scheduleStatusOptions: Option[] = [{ label: "Normal", value: "正常" }, { label: "Expected Delay", value: "预计延误" }, { label: "Delayed", value: "已延误" }, { label: "Cutoff Soon", value: "即将截关" }, { label: "Cancelled", value: "已取消" }];
 
 function text(value: DbValue | undefined) {
   if (Array.isArray(value)) return value.join(",");
   if (value === undefined) return "";
   return String(value);
+}
+
+function statusLabel(value: DbValue | undefined): AdminStatus {
+  const label = text(value);
+  if (["停用", "维护中", "待确认", "已确认", "已取消", "正常", "预计延误", "已延误", "即将截关", "已过期"].includes(label)) return label as AdminStatus;
+  return "启用";
 }
 
 function normalizeRecord(record: DbRecord, fields: Field[]) {
@@ -56,125 +44,42 @@ function normalizeRecord(record: DbRecord, fields: Field[]) {
 }
 
 function buildConfig(kind: ResourceKind, carrierOptions: Option[], portOptions: Option[], routeOptions: Option[]): ResourceConfig {
+  const relationFields = {
+    carrierId: { key: "carrierId", label: "Carrier", type: "select" as const, required: true, options: carrierOptions },
+    routeId: { key: "routeId", label: "Route", type: "select" as const, options: routeOptions },
+    originPortId: { key: "originPortId", label: "Origin Port", type: "select" as const, required: true, options: portOptions },
+    destinationPortId: { key: "destinationPortId", label: "Destination Port", type: "select" as const, required: true, options: portOptions },
+  };
   if (kind === "ports") return {
-    title: "港口管理",
-    description: "维护港口基础资料、UN/LOCODE、国家地区与经纬度。",
-    addLabel: "新增港口",
-    endpoint: "/api/admin/ports",
-    searchPlaceholder: "搜索港口名称、中文名、代码或国家",
-    categoryLabel: "国家筛选",
-    categoryKey: "country",
-    columns: [
-      { key: "name", label: "港口名称" }, { key: "nameZh", label: "中文名称" }, { key: "locode", label: "UN/LOCODE" },
-      { key: "country", label: "国家" }, { key: "region", label: "地区" }, { key: "latitude", label: "纬度" },
-      { key: "longitude", label: "经度" }, { key: "status", label: "状态", type: "badge" }, { key: "updatedAt", label: "更新时间" },
-    ],
-    fields: [
-      { key: "name", label: "港口名称", type: "text", required: true },
-      { key: "nameZh", label: "中文名称", type: "text" },
-      { key: "locode", label: "UN/LOCODE", type: "text", required: true },
-      { key: "country", label: "国家", type: "text", required: true },
-      { key: "countryCode", label: "国家代码", type: "text" },
-      { key: "region", label: "地区", type: "text", required: true },
-      { key: "latitude", label: "纬度", type: "number", min: -90, max: 90 },
-      { key: "longitude", label: "经度", type: "number", min: -180, max: 180 },
-      { key: "status", label: "状态", type: "select", options: statusOptions },
-    ],
+    title: "Port Management", description: "Manage ports, LOCODE, country, region and coordinates.", addLabel: "New Port", endpoint: "/api/admin/ports", searchPlaceholder: "Search port name, code or country", categoryKey: "country",
+    columns: [{ key: "name", label: "Name" }, { key: "nameZh", label: "Chinese Name" }, { key: "locode", label: "LOCODE" }, { key: "country", label: "Country" }, { key: "region", label: "Region" }, { key: "latitude", label: "Lat" }, { key: "longitude", label: "Lng" }, { key: "status", label: "Status", type: "badge" }, { key: "updatedAt", label: "Updated" }],
+    fields: [{ key: "name", label: "Name", type: "text", required: true }, { key: "nameZh", label: "Chinese Name", type: "text" }, { key: "locode", label: "LOCODE", type: "text", required: true }, { key: "country", label: "Country", type: "text", required: true }, { key: "countryCode", label: "Country Code", type: "text" }, { key: "region", label: "Region", type: "text", required: true }, { key: "latitude", label: "Latitude", type: "number", min: -90, max: 90 }, { key: "longitude", label: "Longitude", type: "number", min: -180, max: 180 }, { key: "status", label: "Status", type: "select", options: statusOptions }],
   };
   if (kind === "carriers") return {
-    title: "船公司管理",
-    description: "维护模拟船公司、公司代码、服务航线数量和状态。",
-    addLabel: "新增船公司",
-    endpoint: "/api/admin/carriers",
-    searchPlaceholder: "搜索船公司名称、中文名、代码或国家",
-    categoryLabel: "国家筛选",
-    categoryKey: "country",
-    columns: [
-      { key: "name", label: "船公司名称" }, { key: "nameZh", label: "中文名称" }, { key: "code", label: "公司代码" },
-      { key: "country", label: "国家" }, { key: "routeCount", label: "服务航线数量" }, { key: "scheduleCount", label: "船期数量" },
-      { key: "status", label: "状态", type: "badge" }, { key: "updatedAt", label: "更新时间" },
-    ],
-    fields: [
-      { key: "name", label: "船公司名称", type: "text", required: true },
-      { key: "nameZh", label: "中文名称", type: "text" },
-      { key: "code", label: "公司代码", type: "text", required: true },
-      { key: "country", label: "国家", type: "text", required: true },
-      { key: "status", label: "状态", type: "select", options: statusOptions },
-    ],
+    title: "Carrier Management", description: "Manage simulated carriers and service status.", addLabel: "New Carrier", endpoint: "/api/admin/carriers", searchPlaceholder: "Search carrier name, code or country", categoryKey: "country",
+    columns: [{ key: "name", label: "Name" }, { key: "nameZh", label: "Chinese Name" }, { key: "code", label: "Code" }, { key: "country", label: "Country" }, { key: "routeCount", label: "Routes" }, { key: "scheduleCount", label: "Schedules" }, { key: "status", label: "Status", type: "badge" }, { key: "updatedAt", label: "Updated" }],
+    fields: [{ key: "name", label: "Name", type: "text", required: true }, { key: "nameZh", label: "Chinese Name", type: "text" }, { key: "code", label: "Code", type: "text", required: true }, { key: "country", label: "Country", type: "text", required: true }, { key: "status", label: "Status", type: "select", options: statusOptions }],
+  };
+  if (kind === "routes") return {
+    title: "Route Management", description: "Manage origin, destination, transit ports and services.", addLabel: "New Route", endpoint: "/api/admin/routes", searchPlaceholder: "Search route, service, carrier or port", categoryKey: "direct",
+    columns: [{ key: "name", label: "Name" }, { key: "originPort", label: "Origin" }, { key: "destinationPort", label: "Destination" }, { key: "transitPorts", label: "Transit" }, { key: "carrier", label: "Carrier" }, { key: "serviceName", label: "Service" }, { key: "direct", label: "Direct" }, { key: "averageTransitDays", label: "Days" }, { key: "status", label: "Status", type: "badge" }, { key: "updatedAt", label: "Updated" }],
+    fields: [{ key: "name", label: "Name", type: "text", required: true }, relationFields.originPortId, relationFields.destinationPortId, { key: "transitPortIds", label: "Transit Ports", type: "multi-select", options: portOptions }, relationFields.carrierId, { key: "serviceName", label: "Service", type: "text", required: true }, { key: "direct", label: "Direct", type: "boolean" }, { key: "averageTransitDays", label: "Average Days", type: "number", required: true, min: 1 }, { key: "status", label: "Status", type: "select", options: statusOptions }],
   };
   if (kind === "schedules") return {
-    title: "船期管理",
-    description: "维护数据库船期、船名航次、ETD/ETA、关键节点和状态。",
-    addLabel: "新增船期",
-    endpoint: "/api/admin/schedules",
-    searchPlaceholder: "搜索船名、航次、Service 或航线名称",
-    categoryLabel: "状态筛选",
-    categoryKey: "status",
-    columns: [
-      { key: "carrier", label: "船公司" }, { key: "serviceName", label: "Service" }, { key: "vesselName", label: "船名" }, { key: "voyageNumber", label: "航次" },
-      { key: "originPort", label: "起运港" }, { key: "destinationPort", label: "目的港" }, { key: "etd", label: "ETD" }, { key: "eta", label: "ETA" },
-      { key: "transitPorts", label: "中转港" }, { key: "transitDays", label: "航程天数" }, { key: "status", label: "状态", type: "badge" }, { key: "updatedAt", label: "更新时间" },
-    ],
-    fields: [
-      { key: "carrierId", label: "船公司", type: "select", required: true, options: carrierOptions },
-      { key: "routeId", label: "关联航线", type: "select", options: routeOptions },
-      { key: "serviceName", label: "Service", type: "text", required: true },
-      { key: "routeName", label: "航线名称", type: "text", required: true },
-      { key: "vesselName", label: "船名", type: "text", required: true },
-      { key: "voyageNumber", label: "航次", type: "text", required: true },
-      { key: "originPortId", label: "起运港", type: "select", required: true, options: portOptions },
-      { key: "destinationPortId", label: "目的港", type: "select", required: true, options: portOptions },
-      { key: "transitPortIds", label: "中转港", type: "multi-select", options: portOptions },
-      { key: "etd", label: "ETD", type: "datetime-local", required: true },
-      { key: "eta", label: "ETA", type: "datetime-local", required: true },
-      { key: "transitDays", label: "航程天数", type: "number", required: true, min: 1 },
-      { key: "direct", label: "直达", type: "boolean" },
-      { key: "frequency", label: "班期频率", type: "text", required: true },
-      { key: "originTerminal", label: "起运码头", type: "text", required: true },
-      { key: "destinationTerminal", label: "目的码头", type: "text", required: true },
-      { key: "cyOpenTime", label: "开港时间", type: "datetime-local", required: true },
-      { key: "siCutOffTime", label: "截单时间", type: "datetime-local", required: true },
-      { key: "vgmCutOffTime", label: "VGM 截止", type: "datetime-local", required: true },
-      { key: "customsCutOffTime", label: "截关时间", type: "datetime-local", required: true },
-      { key: "estimatedBerthingTime", label: "预计靠泊", type: "datetime-local", required: true },
-      { key: "departureReliability", label: "准班率", type: "number", required: true, min: 0, max: 100 },
-      { key: "status", label: "船期状态", type: "select", options: [{ label: "正常", value: "正常" }, { label: "预计延误", value: "预计延误" }, { label: "已延误", value: "已延误" }, { label: "即将截关", value: "即将截关" }, { label: "已取消", value: "已取消" }] },
-      { key: "delayHours", label: "延误小时数", type: "number", min: 0 },
-    ],
+    title: "Schedule Management", description: "Manage sailing schedules, vessels, ETD/ETA and milestones.", addLabel: "New Schedule", endpoint: "/api/admin/schedules", searchPlaceholder: "Search vessel, voyage, service or route", categoryKey: "status",
+    columns: [{ key: "carrier", label: "Carrier" }, { key: "serviceName", label: "Service" }, { key: "vesselName", label: "Vessel" }, { key: "voyageNumber", label: "Voyage" }, { key: "originPort", label: "Origin" }, { key: "destinationPort", label: "Destination" }, { key: "etd", label: "ETD" }, { key: "eta", label: "ETA" }, { key: "transitPorts", label: "Transit" }, { key: "transitDays", label: "Days" }, { key: "status", label: "Status", type: "badge" }, { key: "updatedAt", label: "Updated" }],
+    fields: [relationFields.carrierId, relationFields.routeId, { key: "serviceName", label: "Service", type: "text", required: true }, { key: "routeName", label: "Route Name", type: "text", required: true }, { key: "vesselName", label: "Vessel", type: "text", required: true }, { key: "voyageNumber", label: "Voyage", type: "text", required: true }, relationFields.originPortId, relationFields.destinationPortId, { key: "transitPortIds", label: "Transit Ports", type: "multi-select", options: portOptions }, { key: "etd", label: "ETD", type: "datetime-local", required: true }, { key: "eta", label: "ETA", type: "datetime-local", required: true }, { key: "transitDays", label: "Transit Days", type: "number", required: true, min: 1 }, { key: "direct", label: "Direct", type: "boolean" }, { key: "frequency", label: "Frequency", type: "text", required: true }, { key: "originTerminal", label: "Origin Terminal", type: "text", required: true }, { key: "destinationTerminal", label: "Destination Terminal", type: "text", required: true }, { key: "cyOpenTime", label: "CY Open", type: "datetime-local", required: true }, { key: "siCutOffTime", label: "SI Cutoff", type: "datetime-local", required: true }, { key: "vgmCutOffTime", label: "VGM Cutoff", type: "datetime-local", required: true }, { key: "customsCutOffTime", label: "Customs Cutoff", type: "datetime-local", required: true }, { key: "estimatedBerthingTime", label: "Berthing", type: "datetime-local", required: true }, { key: "departureReliability", label: "Reliability", type: "number", required: true, min: 0, max: 100 }, { key: "status", label: "Status", type: "select", options: scheduleStatusOptions }, { key: "delayHours", label: "Delay Hours", type: "number", min: 0 }],
   };
   return {
-    title: "航线管理",
-    description: "维护起运港、目的港、中转港、船公司 Service 与平均航程。",
-    addLabel: "新增航线",
-    endpoint: "/api/admin/routes",
-    searchPlaceholder: "搜索航线、Service、船公司或港口代码",
-    categoryLabel: "直达筛选",
-    categoryKey: "direct",
-    columns: [
-      { key: "name", label: "航线名称" }, { key: "originPort", label: "起运港" }, { key: "destinationPort", label: "目的港" },
-      { key: "transitPorts", label: "中转港" }, { key: "carrier", label: "船公司" }, { key: "serviceName", label: "Service" },
-      { key: "direct", label: "直达或中转" }, { key: "averageTransitDays", label: "平均航程" }, { key: "status", label: "状态", type: "badge" },
-      { key: "updatedAt", label: "更新时间" },
-    ],
-    fields: [
-      { key: "name", label: "航线名称", type: "text", required: true },
-      { key: "originPortId", label: "起运港", type: "select", required: true, options: portOptions },
-      { key: "destinationPortId", label: "目的港", type: "select", required: true, options: portOptions },
-      { key: "transitPortIds", label: "中转港", type: "multi-select", options: portOptions },
-      { key: "carrierId", label: "船公司", type: "select", required: true, options: carrierOptions },
-      { key: "serviceName", label: "Service 名称", type: "text", required: true },
-      { key: "direct", label: "直达航线", type: "boolean" },
-      { key: "averageTransitDays", label: "平均航程天数", type: "number", required: true, min: 1 },
-      { key: "status", label: "状态", type: "select", options: statusOptions },
-    ],
+    title: "Rate Management", description: "Manage rate quotes, container types, fees and validity.", addLabel: "New Rate", endpoint: "/api/admin/rates", searchPlaceholder: "Search carrier, service, port, vessel or voyage", categoryKey: "containerType",
+    columns: [{ key: "carrier", label: "Carrier" }, { key: "serviceName", label: "Service" }, { key: "origin", label: "Origin" }, { key: "destination", label: "Destination" }, { key: "containerType", label: "Container" }, { key: "baseFreight", label: "Base" }, { key: "totalBasePrice", label: "Total" }, { key: "currency", label: "Currency" }, { key: "effectiveFrom", label: "Effective" }, { key: "validUntil", label: "Valid Until" }, { key: "status", label: "Status", type: "badge" }],
+    fields: [relationFields.carrierId, relationFields.routeId, relationFields.originPortId, relationFields.destinationPortId, { key: "serviceName", label: "Service", type: "text", required: true }, { key: "transportMode", label: "Mode", type: "select", options: [{ label: "FCL", value: "FCL" }, { label: "LCL", value: "LCL" }, { label: "AIR", value: "AIR" }] }, { key: "containerType", label: "Container", type: "select", required: true, options: [{ label: "20GP", value: "TWENTY_GP" }, { label: "40GP", value: "FORTY_GP" }, { label: "40HC", value: "FORTY_HC" }, { label: "45HC", value: "FORTY_FIVE_HC" }] }, { key: "currency", label: "Currency", type: "text", required: true }, { key: "baseFreight", label: "Base Freight", type: "number", required: true, min: 0 }, { key: "fuelSurcharge", label: "Fuel", type: "number", required: true, min: 0 }, { key: "terminalHandlingCharge", label: "THC", type: "number", required: true, min: 0 }, { key: "documentationFee", label: "Documentation", type: "number", required: true, min: 0 }, { key: "bookingFee", label: "Booking", type: "number", required: true, min: 0 }, { key: "dangerousGoodsSurcharge", label: "DG Surcharge", type: "number", min: 0 }, { key: "otherSurcharge", label: "Other", type: "number", min: 0 }, { key: "totalBasePrice", label: "Total Base", type: "number", required: true, min: 0 }, { key: "effectiveFrom", label: "Effective From", type: "datetime-local", required: true }, { key: "validUntil", label: "Valid Until", type: "datetime-local", required: true }, { key: "transitDays", label: "Transit Days", type: "number", required: true, min: 1 }, { key: "direct", label: "Direct", type: "boolean" }, { key: "stopCount", label: "Stops", type: "number", min: 0 }, { key: "vesselName", label: "Vessel", type: "text", required: true }, { key: "voyageNumber", label: "Voyage", type: "text", required: true }, { key: "etd", label: "ETD", type: "datetime-local", required: true }, { key: "eta", label: "ETA", type: "datetime-local", required: true }, { key: "cutOffDate", label: "Cutoff", type: "datetime-local", required: true }, { key: "freeDays", label: "Free Days", type: "number", min: 0 }, { key: "reliability", label: "Reliability", type: "number", required: true, min: 0, max: 100 }, { key: "status", label: "Status", type: "select", options: statusOptions }],
   };
 }
 
 async function parseResponse(response: Response) {
   const payload = await response.json() as ApiItemResponse | ApiListResponse | ApiErrorResponse;
-  if (!response.ok) {
-    return { ok: false as const, message: "error" in payload ? payload.error.message : "请求失败" };
-  }
+  if (!response.ok) return { ok: false as const, message: "error" in payload ? payload.error.message : "Request failed" };
   return { ok: true as const, payload };
 }
 
@@ -194,28 +99,15 @@ export function AdminDatabaseResourcePage({ resource }: { resource: ResourceKind
   const [portOptions, setPortOptions] = useState<Option[]>([]);
   const [routeOptions, setRouteOptions] = useState<Option[]>([]);
   const config = useMemo(() => buildConfig(resource, carrierOptions, portOptions, routeOptions), [carrierOptions, portOptions, resource, routeOptions]);
-
   const categories = useMemo(() => Array.from(new Set(records.map((item) => text(config.categoryKey ? item[config.categoryKey] : undefined)).filter(Boolean))), [config.categoryKey, records]);
 
   const loadOptions = useCallback(async () => {
-    if (resource !== "routes" && resource !== "schedules") return;
-    const [portsResponse, carriersResponse, routesResponse] = await Promise.all([
-      fetch("/api/admin/ports?pageSize=100"),
-      fetch("/api/admin/carriers?pageSize=100"),
-      fetch("/api/admin/routes?pageSize=100"),
-    ]);
-    const portsPayload = await parseResponse(portsResponse);
-    const carriersPayload = await parseResponse(carriersResponse);
-    const routesPayload = await parseResponse(routesResponse);
-    if (portsPayload.ok && "pagination" in portsPayload.payload) {
-      setPortOptions(portsPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} (${text(item.locode)})` })));
-    }
-    if (carriersPayload.ok && "pagination" in carriersPayload.payload) {
-      setCarrierOptions(carriersPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} (${text(item.code)})` })));
-    }
-    if (routesPayload.ok && "pagination" in routesPayload.payload) {
-      setRouteOptions(routesPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} · ${text(item.serviceName)}` })));
-    }
+    if (!["routes", "schedules", "rates"].includes(resource)) return;
+    const [portsResponse, carriersResponse, routesResponse] = await Promise.all([fetch("/api/admin/ports?pageSize=100"), fetch("/api/admin/carriers?pageSize=100"), fetch("/api/admin/routes?pageSize=100")]);
+    const [portsPayload, carriersPayload, routesPayload] = await Promise.all([parseResponse(portsResponse), parseResponse(carriersResponse), parseResponse(routesResponse)]);
+    if (portsPayload.ok && "pagination" in portsPayload.payload) setPortOptions(portsPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} (${text(item.locode)})` })));
+    if (carriersPayload.ok && "pagination" in carriersPayload.payload) setCarrierOptions(carriersPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} (${text(item.code)})` })));
+    if (routesPayload.ok && "pagination" in routesPayload.payload) setRouteOptions(routesPayload.payload.data.map((item) => ({ value: item.id, label: `${text(item.name)} / ${text(item.serviceName)}` })));
   }, [resource]);
 
   const loadData = useCallback(async () => {
@@ -229,21 +121,11 @@ export function AdminDatabaseResourcePage({ resource }: { resource: ResourceKind
       else params.set(config.categoryKey, category);
     }
     try {
-      const response = await fetch(`${config.endpoint}?${params.toString()}`);
-      const result = await parseResponse(response);
-      if (!result.ok) {
-        setError(result.message);
-        setRecords([]);
-      } else if ("pagination" in result.payload) {
-        setRecords(result.payload.data);
-        setPagination(result.payload.pagination);
-      }
-    } catch {
-      setError("数据库接口暂不可用，请检查 DATABASE_URL 和服务状态");
-      setRecords([]);
-    } finally {
-      setLoading(false);
-    }
+      const result = await parseResponse(await fetch(`${config.endpoint}?${params.toString()}`));
+      if (!result.ok) { setError(result.message); setRecords([]); }
+      else if ("pagination" in result.payload) { setRecords(result.payload.data); setPagination(result.payload.pagination); }
+    } catch { setError("Database API is unavailable. Check DATABASE_URL and server status."); setRecords([]); }
+    finally { setLoading(false); }
   }, [category, config.categoryKey, config.endpoint, page, query, resource, status]);
 
   useEffect(() => { void loadOptions(); }, [loadOptions]);
@@ -263,39 +145,28 @@ export function AdminDatabaseResourcePage({ resource }: { resource: ResourceKind
   const saveRecord = async (record: DbRecord) => {
     setNotice("");
     const payload: Record<string, DbValue | undefined> = {};
-    config.fields.forEach((field) => {
-      payload[field.key] = record[field.key];
-    });
+    config.fields.forEach((field) => { payload[field.key] = record[field.key]; });
     const endpoint = drawer?.mode === "create" ? config.endpoint : `${config.endpoint}/${record.id}`;
-    const method = drawer?.mode === "create" ? "POST" : "PUT";
-    const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const response = await fetch(endpoint, { method: drawer?.mode === "create" ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const result = await parseResponse(response);
-    if (!result.ok) {
-      setNotice(result.message);
-      return;
-    }
+    if (!result.ok) { setNotice(result.message); return; }
     setDrawer(null);
-    setNotice("保存成功，数据已写入数据库");
+    setNotice("Saved to MySQL.");
     await loadData();
     await loadOptions();
   };
 
   const removeRecord = async () => {
     if (!deleteTarget) return;
-    const response = await fetch(`${config.endpoint}/${deleteTarget.id}`, { method: "DELETE" });
-    const result = await parseResponse(response);
-    if (!result.ok) {
-      setNotice(result.message);
-      setDeleteTarget(null);
-      return;
-    }
+    const result = await parseResponse(await fetch(`${config.endpoint}/${deleteTarget.id}`, { method: "DELETE" }));
+    if (!result.ok) { setNotice(result.message); setDeleteTarget(null); return; }
     setDeleteTarget(null);
-    setNotice("删除成功");
+    setNotice("Deleted.");
     await loadData();
     await loadOptions();
   };
 
-  return <div className="space-y-5"><section className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><h2 className="text-2xl font-semibold text-ink">{config.title}</h2><p className="mt-1 text-sm text-slate-500">{config.description}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setDrawer({ mode: "create", record: emptyRecord() })} className="admin-primary"><Plus className="h-4 w-4" />{config.addLabel}</button><button className="admin-secondary"><FileUp className="h-4 w-4" />导入</button><button className="admin-secondary"><Download className="h-4 w-4" />导出</button></div></div><div className="mt-5 grid gap-3 lg:grid-cols-[1fr_160px_180px_auto]"><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder={config.searchPlaceholder} className="admin-input" /><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="admin-input"><option>全部</option><option>启用</option><option>停用</option></select><select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }} className="admin-input"><option>全部</option>{(resource === "routes" ? ["直达", "中转"] : categories).map((item) => <option key={item}>{item}</option>)}</select><button onClick={() => { setQuery(""); setStatus("全部"); setCategory("全部"); setPage(1); }} className="admin-secondary"><RotateCcw className="h-4 w-4" />重置筛选</button></div>{notice ? <div className="mt-4 rounded-md bg-ocean-50 px-3 py-2 text-sm text-ocean-700">{notice}</div> : null}</section><section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">{loading ? <div className="p-8 text-sm text-slate-500">正在加载数据库数据...</div> : error ? <div className="p-8"><p className="text-sm text-rose-700">{error}</p><button onClick={() => void loadData()} className="admin-primary mt-4">重试</button></div> : records.length ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>{config.columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}<th className="px-4 py-3">操作</th></tr></thead><tbody>{records.map((record) => <tr key={record.id} className="border-t border-slate-100 hover:bg-ocean-50/40">{config.columns.map((column) => <td key={column.key} className="px-4 py-3 text-slate-700">{column.type === "badge" ? <AdminStatusBadge status={statusLabel(record.status)} /> : text(record[column.key]) || "-"}</td>)}<td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => setDrawer({ mode: "view", record: normalizeRecord(record, config.fields) })} className="admin-icon"><Eye className="h-4 w-4" /></button><button onClick={() => setDrawer({ mode: "edit", record: normalizeRecord(record, config.fields) })} className="admin-icon"><Pencil className="h-4 w-4" /></button><button onClick={() => setDeleteTarget(record)} className="admin-icon text-rose-600"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}</tbody></table></div> : <AdminEmptyState title="暂无数据库记录" description="请先运行 Prisma seed，或点击新增创建第一条记录。" />}</section><div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500"><span>共 {pagination.total} 条 · 第 {pagination.page}/{pagination.totalPages} 页</span><div className="flex gap-2"><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="admin-page">上一页</button><button disabled={page === pagination.totalPages} onClick={() => setPage((value) => Math.min(pagination.totalPages, value + 1))} className="admin-page">下一页</button></div></div>{drawer ? <DbFormDrawer config={config} mode={drawer.mode} record={drawer.record} onClose={() => setDrawer(null)} onSave={saveRecord} /> : null}{deleteTarget ? <ConfirmDialog title="确认删除" message={`确定删除 ${text(deleteTarget.name) || deleteTarget.id} 吗？数据库将同步删除。`} onCancel={() => setDeleteTarget(null)} onConfirm={removeRecord} /> : null}</div>;
+  return <div className="space-y-5"><section className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><h2 className="text-2xl font-semibold text-ink">{config.title}</h2><p className="mt-1 text-sm text-slate-500">{config.description}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setDrawer({ mode: "create", record: emptyRecord() })} className="admin-primary"><Plus className="h-4 w-4" />{config.addLabel}</button><button className="admin-secondary"><FileUp className="h-4 w-4" />Import</button><button className="admin-secondary"><Download className="h-4 w-4" />Export</button></div></div><div className="mt-5 grid gap-3 lg:grid-cols-[1fr_160px_180px_auto]"><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder={config.searchPlaceholder} className="admin-input" /><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="admin-input"><option>全部</option><option>启用</option><option>停用</option><option>已过期</option></select><select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }} className="admin-input"><option>全部</option>{(resource === "routes" ? ["直达", "中转"] : categories).map((item) => <option key={item}>{item}</option>)}</select><button onClick={() => { setQuery(""); setStatus("全部"); setCategory("全部"); setPage(1); }} className="admin-secondary"><RotateCcw className="h-4 w-4" />Reset</button></div>{notice ? <div className="mt-4 rounded-md bg-ocean-50 px-3 py-2 text-sm text-ocean-700">{notice}</div> : null}</section><section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">{loading ? <div className="p-8 text-sm text-slate-500">Loading database records...</div> : error ? <div className="p-8"><p className="text-sm text-rose-700">{error}</p><button onClick={() => void loadData()} className="admin-primary mt-4">Retry</button></div> : records.length ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>{config.columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}<th className="px-4 py-3">Actions</th></tr></thead><tbody>{records.map((record) => <tr key={record.id} className="border-t border-slate-100 hover:bg-ocean-50/40">{config.columns.map((column) => <td key={column.key} className="px-4 py-3 text-slate-700">{column.type === "badge" ? <AdminStatusBadge status={statusLabel(record.status)} /> : text(record[column.key]) || "-"}</td>)}<td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => setDrawer({ mode: "view", record: normalizeRecord(record, config.fields) })} className="admin-icon"><Eye className="h-4 w-4" /></button><button onClick={() => setDrawer({ mode: "edit", record: normalizeRecord(record, config.fields) })} className="admin-icon"><Pencil className="h-4 w-4" /></button><button onClick={() => setDeleteTarget(record)} className="admin-icon text-rose-600"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}</tbody></table></div> : <AdminEmptyState title="No records" description="Run Prisma seed or create a record." />}</section><div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500"><span>Total {pagination.total} / Page {pagination.page} of {pagination.totalPages}</span><div className="flex gap-2"><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="admin-page">Previous</button><button disabled={page === pagination.totalPages} onClick={() => setPage((value) => Math.min(pagination.totalPages, value + 1))} className="admin-page">Next</button></div></div>{drawer ? <DbFormDrawer config={config} mode={drawer.mode} record={drawer.record} onClose={() => setDrawer(null)} onSave={saveRecord} /> : null}{deleteTarget ? <ConfirmDialog title="Confirm delete" message={`Delete ${text(deleteTarget.name) || deleteTarget.id}?`} onCancel={() => setDeleteTarget(null)} onConfirm={removeRecord} /> : null}</div>;
 }
 
 function DbFormDrawer({ config, mode, record, onClose, onSave }: { config: ResourceConfig; mode: "view" | "edit" | "create"; record: DbRecord; onClose: () => void; onSave: (record: DbRecord) => void }) {
@@ -304,18 +175,14 @@ function DbFormDrawer({ config, mode, record, onClose, onSave }: { config: Resou
   const readonly = mode === "view";
   const submit = () => {
     const required = config.fields.find((field) => field.required && !text(form[field.key]));
-    if (required) { setError(`${required.label}必填`); return; }
+    if (required) { setError(`${required.label} is required`); return; }
     const invalid = config.fields.find((field) => field.type === "number" && ((field.min !== undefined && Number(form[field.key]) < field.min) || (field.max !== undefined && Number(form[field.key]) > field.max)));
-    if (invalid) { setError(`${invalid.label}范围不正确`); return; }
+    if (invalid) { setError(`${invalid.label} is out of range`); return; }
     onSave(form);
   };
-  return <div className="fixed inset-0 z-[2200] bg-ink/40"><aside className="ml-auto h-full w-full max-w-xl overflow-y-auto bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-200 p-5"><div><h3 className="text-xl font-semibold text-ink">{mode === "create" ? config.addLabel : mode === "edit" ? "编辑记录" : "查看详情"}</h3><p className="mt-1 text-sm text-slate-500">数据通过后台 API 写入 PostgreSQL。</p></div><button onClick={onClose} className="admin-icon"><X className="h-4 w-4" /></button></header><div className="space-y-4 p-5">{error ? <div className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}{config.fields.map((field) => <label key={field.key} className="block"><span className="mb-1 block text-sm font-semibold text-slate-700">{field.label}</span>{field.type === "select" ? <select disabled={readonly} value={text(form[field.key])} onChange={(event) => setForm({ ...form, [field.key]: event.target.value })} className="admin-input"><option value="">请选择</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : field.type === "boolean" ? <select disabled={readonly} value={form[field.key] ? "true" : "false"} onChange={(event) => setForm({ ...form, [field.key]: event.target.value === "true" })} className="admin-input"><option value="true">直达</option><option value="false">中转</option></select> : field.type === "multi-select" ? <div className="max-h-44 overflow-y-auto rounded-md border border-slate-200 p-2">{field.options?.map((option) => { const values = Array.isArray(form[field.key]) ? form[field.key] as string[] : []; const checked = values.includes(option.value); return <label key={option.value} className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"><input disabled={readonly} type="checkbox" checked={checked} onChange={(event) => setForm({ ...form, [field.key]: event.target.checked ? [...values, option.value] : values.filter((value) => value !== option.value) })} />{option.label}</label>; })}</div> : <input disabled={readonly} type={field.type} value={text(form[field.key])} onChange={(event) => setForm({ ...form, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value })} className="admin-input" />}</label>)}</div><footer className="flex justify-end gap-2 border-t border-slate-200 p-5"><button onClick={onClose} className="admin-secondary">关闭</button>{!readonly ? <button onClick={submit} className="admin-primary">保存</button> : null}</footer></aside></div>;
+  return <div className="fixed inset-0 z-[2200] bg-ink/40"><aside className="ml-auto h-full w-full max-w-xl overflow-y-auto bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-200 p-5"><div><h3 className="text-xl font-semibold text-ink">{mode === "create" ? config.addLabel : mode === "edit" ? "Edit Record" : "Record Detail"}</h3><p className="mt-1 text-sm text-slate-500">Data is written through the admin API into MySQL.</p></div><button onClick={onClose} className="admin-icon"><X className="h-4 w-4" /></button></header><div className="space-y-4 p-5">{error ? <div className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}{config.fields.map((field) => <label key={field.key} className="block"><span className="mb-1 block text-sm font-semibold text-slate-700">{field.label}</span>{field.type === "select" ? <select disabled={readonly} value={text(form[field.key])} onChange={(event) => setForm({ ...form, [field.key]: event.target.value })} className="admin-input"><option value="">Select</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : field.type === "boolean" ? <select disabled={readonly} value={form[field.key] ? "true" : "false"} onChange={(event) => setForm({ ...form, [field.key]: event.target.value === "true" })} className="admin-input"><option value="true">Direct</option><option value="false">Transshipment</option></select> : field.type === "multi-select" ? <div className="max-h-44 overflow-y-auto rounded-md border border-slate-200 p-2">{field.options?.map((option) => { const values = Array.isArray(form[field.key]) ? form[field.key] as string[] : []; const checked = values.includes(option.value); return <label key={option.value} className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"><input disabled={readonly} type="checkbox" checked={checked} onChange={(event) => setForm({ ...form, [field.key]: event.target.checked ? [...values, option.value] : values.filter((value) => value !== option.value) })} />{option.label}</label>; })}</div> : <input disabled={readonly} type={field.type} value={text(form[field.key])} onChange={(event) => setForm({ ...form, [field.key]: field.type === "number" ? Number(event.target.value) : event.target.value })} className="admin-input" />}</label>)}</div><footer className="flex justify-end gap-2 border-t border-slate-200 p-5"><button onClick={onClose} className="admin-secondary">Close</button>{!readonly ? <button onClick={submit} className="admin-primary">Save</button> : null}</footer></aside></div>;
 }
 
-function ConfirmDialog({ title, message, onCancel, onConfirm }: { title: string; message: string; onCancel: () => void; onConfirm: () => void }) { return <div className="fixed inset-0 z-[2300] flex items-center justify-center bg-ink/45 p-4"><div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"><h3 className="text-lg font-semibold text-ink">{title}</h3><p className="mt-2 text-sm text-slate-600">{message}</p><div className="mt-5 flex justify-end gap-2"><button onClick={onCancel} className="admin-secondary">取消</button><button onClick={onConfirm} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">删除</button></div></div></div>; }
-
-
-
-
-
-
+function ConfirmDialog({ title, message, onCancel, onConfirm }: { title: string; message: string; onCancel: () => void; onConfirm: () => void }) {
+  return <div className="fixed inset-0 z-[2300] flex items-center justify-center bg-ink/45 p-4"><div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"><h3 className="text-lg font-semibold text-ink">{title}</h3><p className="mt-2 text-sm text-slate-600">{message}</p><div className="mt-5 flex justify-end gap-2"><button onClick={onCancel} className="admin-secondary">Cancel</button><button onClick={onConfirm} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Delete</button></div></div></div>;
+}

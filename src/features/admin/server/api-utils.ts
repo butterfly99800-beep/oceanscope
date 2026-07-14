@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | "CARRIER_NOT_FOUND"
   | "ROUTE_NOT_FOUND"
   | "SCHEDULE_NOT_FOUND"
+  | "RATE_NOT_FOUND"
   | "CONFLICT"
   | "DELETE_BLOCKED"
   | "DATABASE_ERROR"

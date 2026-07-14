@@ -28,10 +28,12 @@ model Port {
   originRoutes       Route[]            @relation("RouteOriginPort")
   destinationRoutes  Route[]            @relation("RouteDestinationPort")
   transitRouteLinks  RouteTransitPort[]
-  originSchedules    SailingSchedule[]  @relation("ScheduleOriginPort")
-  destinationSchedules SailingSchedule[] @relation("ScheduleDestinationPort")
+  originSchedules      SailingSchedule[]  @relation("ScheduleOriginPort")
+  destinationSchedules SailingSchedule[]  @relation("ScheduleDestinationPort")
   scheduleTransitLinks ScheduleTransitPort[]
-  scheduleRouteNodes ScheduleRouteNode[]
+  scheduleRouteNodes   ScheduleRouteNode[]
+  originRateQuotes     RateQuote[]        @relation("RateOriginPort")
+  destinationRateQuotes RateQuote[]       @relation("RateDestinationPort")
 
   @@index([country])
   @@index([region])
@@ -49,6 +51,7 @@ model Carrier {
   updatedAt DateTime     @updatedAt
   routes    Route[]
   schedules SailingSchedule[]
+  rateQuotes RateQuote[]
 
   @@index([country])
   @@index([status])
@@ -71,6 +74,7 @@ model Route {
   destinationPort      Port               @relation("RouteDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
   transitPorts         RouteTransitPort[]
   schedules            SailingSchedule[]
+  rateQuotes           RateQuote[]
 
   @@index([carrierId])
   @@index([originPortId])
@@ -192,4 +196,101 @@ model ScheduleRouteNode {
 
   @@unique([scheduleId, sequence])
   @@index([portId])
+}
+enum RateStatus {
+  ACTIVE
+  EXPIRED
+  INACTIVE
+}
+
+enum TransportMode {
+  FCL
+  LCL
+  AIR
+}
+
+enum ContainerType {
+  TWENTY_GP
+  FORTY_GP
+  FORTY_HC
+  FORTY_FIVE_HC
+}
+
+enum RateChargeCategory {
+  BASE
+  ORIGIN
+  DESTINATION
+  SURCHARGE
+  OPTIONAL
+}
+
+model RateQuote {
+  id                      String          @id @default(cuid())
+  carrierId               String
+  routeId                 String?
+  originPortId            String
+  destinationPortId       String
+  serviceName             String          @db.VarChar(80)
+  transportMode           TransportMode   @default(FCL)
+  containerType           ContainerType
+  currency                String          @db.VarChar(3)
+  baseFreight             Decimal         @db.Decimal(12, 2)
+  fuelSurcharge           Decimal         @db.Decimal(12, 2)
+  terminalHandlingCharge  Decimal         @db.Decimal(12, 2)
+  documentationFee        Decimal         @db.Decimal(12, 2)
+  bookingFee              Decimal         @db.Decimal(12, 2)
+  dangerousGoodsSurcharge Decimal         @db.Decimal(12, 2) @default(0)
+  otherSurcharge          Decimal         @db.Decimal(12, 2) @default(0)
+  totalBasePrice          Decimal         @db.Decimal(12, 2)
+  effectiveFrom           DateTime
+  validUntil              DateTime
+  transitDays             Int
+  direct                  Boolean         @default(false)
+  stopCount               Int             @default(0)
+  vesselName              String          @db.VarChar(80)
+  voyageNumber            String          @db.VarChar(40)
+  etd                     DateTime
+  eta                     DateTime
+  cutOffDate              DateTime
+  freeDays                Int             @default(7)
+  reliability             Int
+  status                  RateStatus      @default(ACTIVE)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  carrier                 Carrier         @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  route                   Route?          @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  originPort              Port            @relation("RateOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
+  destinationPort         Port            @relation("RateDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
+  lineItems               RateLineItem[]
+
+  @@unique([carrierId, originPortId, destinationPortId, serviceName, containerType, effectiveFrom, validUntil])
+  @@index([carrierId])
+  @@index([routeId])
+  @@index([originPortId])
+  @@index([destinationPortId])
+  @@index([containerType])
+  @@index([effectiveFrom])
+  @@index([validUntil])
+  @@index([status])
+  @@index([etd])
+  @@index([eta])
+}
+
+model RateLineItem {
+  id          String             @id @default(cuid())
+  rateQuoteId String
+  category    RateChargeCategory
+  code        String             @db.VarChar(40)
+  name        String             @db.VarChar(120)
+  description String?            @db.VarChar(255)
+  unit        String             @db.VarChar(40)
+  unitPrice   Decimal            @db.Decimal(12, 2)
+  currency    String             @db.VarChar(3)
+  required    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  rateQuote   RateQuote          @relation(fields: [rateQuoteId], references: [id], onDelete: Cascade)
+
+  @@index([rateQuoteId])
+  @@index([category])
 }

@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RateFilters } from "@/features/rates/components/RateFilters";
@@ -9,15 +9,18 @@ import { RateSearchForm } from "@/features/rates/components/RateSearchForm";
 import { RateSummaryPanel } from "@/features/rates/components/RateSummaryPanel";
 import { RecentSearches } from "@/features/rates/components/RecentSearches";
 import { QuoteDrawer } from "@/features/rates/components/QuoteDrawer";
-import { initialRecentSearches, mockRateOptions, rateLocations } from "@/features/rates/data/mock-rate-data";
+import { initialRecentSearches, rateLocations as fallbackRateLocations } from "@/features/rates/data/mock-rate-data";
 import type { BookingOrder } from "@/features/orders/types";
 import { calculateQuote } from "@/features/rates/lib/calculateQuote";
-import type { AdditionalServicesState, ContainerSelection, RateFiltersState, RateOption, RateSearchCriteria, RecentSearch, SortOption, ValidationErrors } from "@/features/rates/types";
+import type { AdditionalServicesState, ContainerSelection, ContainerType, LocationOption, RateFiltersState, RateOption, RateSearchCriteria, RecentSearch, SortOption, ValidationErrors } from "@/features/rates/types";
 
 const emptyContainers: ContainerSelection = { "20GP": 0, "40GP": 0, "40HC": 1, "45HC": 0 };
 const initialCriteria: RateSearchCriteria = { originId: "", destinationId: "", cargoReadyDate: "", transportMode: "整箱海运", containers: emptyContainers, cargoType: "general" };
 const initialFilters: RateFiltersState = { stops: "all", carriers: [], maxPrice: 9000, maxTransitDays: 35, minFreeDays: 0, minReliability: 70, departureFrom: "" };
 const initialServices: AdditionalServicesState = { exportCustoms: false, importCustoms: false, pickup: false, delivery: false, insurance: "none", freeDays: "standard" };
+
+type PortsSearchResponse = { data: Array<{ id: string; name: string; nameZh?: string; locode: string; country: string; region: string }> };
+type RateSearchResponse = { data: RateOption[] } | { error: { message: string } };
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -27,10 +30,10 @@ function selectedContainerCount(containers: ContainerSelection) {
   return Object.values(containers).reduce((sum, count) => sum + count, 0);
 }
 
-function validate(criteria: RateSearchCriteria): ValidationErrors {
+function validate(criteria: RateSearchCriteria, locations: LocationOption[]): ValidationErrors {
   const errors: ValidationErrors = {};
-  if (!rateLocations.some((location) => location.id === criteria.originId)) errors.originId = "请选择有效起运地";
-  if (!rateLocations.some((location) => location.id === criteria.destinationId)) errors.destinationId = "请选择有效目的地";
+  if (!locations.some((location) => location.id === criteria.originId || location.name.toLowerCase() === criteria.originId.toLowerCase() || location.locode.toLowerCase() === criteria.originId.toLowerCase())) errors.originId = "请选择有效起运地";
+  if (!locations.some((location) => location.id === criteria.destinationId || location.name.toLowerCase() === criteria.destinationId.toLowerCase() || location.locode.toLowerCase() === criteria.destinationId.toLowerCase())) errors.destinationId = "请选择有效目的地";
   if (criteria.originId && criteria.destinationId && criteria.originId === criteria.destinationId) errors.destinationId = "起运地和目的地不能相同";
   if (!criteria.cargoReadyDate) errors.cargoReadyDate = "请选择货好日期";
   if (criteria.cargoReadyDate && criteria.cargoReadyDate < todayIso()) errors.cargoReadyDate = "货好日期不能早于今天";
@@ -39,7 +42,7 @@ function validate(criteria: RateSearchCriteria): ValidationErrors {
 }
 
 function optionMatchesFilters(option: RateOption, filters: RateFiltersState) {
-  const stopMatch = filters.stops === "all" || (filters.stops === "direct" && option.stops === 0) || (filters.stops === "one" && option.stops === 1) || (filters.stops === "two" && option.stops === 2);
+  const stopMatch = filters.stops === "all" || (filters.stops === "direct" && option.stops === 0) || (filters.stops === "one" && option.stops === 1) || (filters.stops === "two" && option.stops >= 2);
   const carrierMatch = filters.carriers.length === 0 || filters.carriers.includes(option.carrier);
   const priceMatch = option.totalPrice / 100 <= filters.maxPrice;
   const timeMatch = option.transitDays <= filters.maxTransitDays;
@@ -59,35 +62,72 @@ function sortOptions(options: RateOption[], sort: SortOption) {
   });
 }
 
+function containersForApi(containers: ContainerSelection) {
+  return (Object.entries(containers) as Array<[ContainerType, number]>).filter(([, quantity]) => quantity > 0).map(([type, quantity]) => ({ type, quantity }));
+}
+
+function mapPortLocation(port: PortsSearchResponse["data"][number]): LocationOption {
+  return { id: port.id, name: port.name, country: port.country, region: port.region, type: "港口", locode: port.locode, aliases: [port.nameZh ?? "", port.locode, port.country].filter(Boolean) };
+}
+
 export function RatesShell() {
   const [criteria, setCriteria] = useState<RateSearchCriteria>(initialCriteria);
+  const [locations, setLocations] = useState<LocationOption[]>(fallbackRateLocations);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [hasSearched, setHasSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortOption>("recommended");
   const [filters, setFilters] = useState<RateFiltersState>(initialFilters);
+  const [rateOptions, setRateOptions] = useState<RateOption[]>([]);
+  const [rateError, setRateError] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>(initialRecentSearches);
   const [services, setServices] = useState<AdditionalServicesState>(initialServices);
   const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   const [savedNotice, setSavedNotice] = useState("");
 
-  const carriers = useMemo(() => Array.from(new Set(mockRateOptions.map((option) => option.carrier))), []);
-  const filteredOptions = useMemo(() => sortOptions(mockRateOptions.filter((option) => optionMatchesFilters(option, filters)), sort), [filters, sort]);
-  const selectedOption = filteredOptions.find((option) => option.id === selectedId) ?? mockRateOptions.find((option) => option.id === selectedId) ?? null;
+  useEffect(() => {
+    let active = true;
+    fetch("/api/ports/search?q=&pageSize=100")
+      .then((response) => response.json() as Promise<PortsSearchResponse>)
+      .then((payload) => {
+        if (!active || !Array.isArray(payload.data)) return;
+        const mapped = payload.data.map(mapPortLocation);
+        setLocations([...mapped, ...fallbackRateLocations.filter((fallback) => !mapped.some((item) => item.locode === fallback.locode))]);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const carriers = useMemo(() => Array.from(new Set(rateOptions.map((option) => option.carrier))), [rateOptions]);
+  const filteredOptions = useMemo(() => sortOptions(rateOptions.filter((option) => optionMatchesFilters(option, filters)), sort), [filters, rateOptions, sort]);
+  const selectedOption = filteredOptions.find((option) => option.id === selectedId) ?? rateOptions.find((option) => option.id === selectedId) ?? null;
   const calculation = selectedOption ? calculateQuote({ option: selectedOption, containers: criteria.containers, isDangerous: criteria.cargoType === "dangerous", services }) : null;
 
-  const runSearch = () => {
-    const nextErrors = validate(criteria);
+  const runSearch = async () => {
+    const nextErrors = validate(criteria, locations);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     setIsLoading(true);
-    window.setTimeout(() => {
+    setRateError("");
+    setSelectedId(null);
+    try {
+      const response = await fetch("/api/rates/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ origin: criteria.originId, destination: criteria.destinationId, readyDate: criteria.cargoReadyDate, transportMode: criteria.transportMode, cargoType: criteria.cargoType, containers: containersForApi(criteria.containers), filters, sort }) });
+      const payload = await response.json() as RateSearchResponse;
+      if (!response.ok || "error" in payload) {
+        setRateError("error" in payload ? payload.error.message : "运价查询失败，请稍后重试");
+        setRateOptions([]);
+      } else {
+        setRateOptions(payload.data);
+        setHasSearched(true);
+        setRecentSearches((items) => [{ id: `r-${Date.now()}`, originId: criteria.originId, destinationId: criteria.destinationId, containerSummary: Object.entries(criteria.containers).filter(([, count]) => count > 0).map(([type, count]) => `${count} x ${type}`).join(" · "), date: criteria.cargoReadyDate, dangerous: criteria.cargoType === "dangerous" }, ...items].slice(0, 5));
+      }
+    } catch {
+      setRateError("数据库运价接口暂不可用，请稍后重试");
+      setRateOptions([]);
+    } finally {
       setIsLoading(false);
-      setHasSearched(true);
-      setSelectedId(null);
-      setRecentSearches((items) => [{ id: `r-${Date.now()}`, originId: criteria.originId, destinationId: criteria.destinationId, containerSummary: Object.entries(criteria.containers).filter(([, count]) => count > 0).map(([type, count]) => `${count} x ${type}`).join(" · "), date: criteria.cargoReadyDate, dangerous: criteria.cargoType === "dangerous" }, ...items].slice(0, 5));
-    }, 900);
+    }
   };
 
   const fillRecent = (search: RecentSearch) => {
@@ -98,17 +138,18 @@ export function RatesShell() {
     <PageContainer className="py-6">
       <PageHeader eyebrow="Rates" title="运费探索器" description="快速查询海运方案、运输时效与费用明细" />
       {savedNotice ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{savedNotice}</div> : null}
+      {rateError ? <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{rateError}</div> : null}
 
       {!hasSearched ? (
         <>
-          <RateSearchForm criteria={criteria} locations={rateLocations} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={runSearch} />
-          <RecentSearches searches={recentSearches} locations={rateLocations} onSelect={fillRecent} onClear={() => setRecentSearches([])} />
+          <RateSearchForm criteria={criteria} locations={locations} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={runSearch} />
+          <RecentSearches searches={recentSearches} locations={locations} onSelect={fillRecent} onClear={() => setRecentSearches([])} />
           <section className="mt-6 grid gap-4 md:grid-cols-3"><div className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><h3 className="font-semibold text-ink">多承运商报价</h3><p className="mt-2 text-sm text-slate-600">比较多个模拟承运商服务、时效和价格。</p></div><div className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><h3 className="font-semibold text-ink">费用明细透明</h3><p className="mt-2 text-sm text-slate-600">基础运费、起运地、目的地和附加费用分组展示。</p></div><div className="rounded-lg border border-slate-200 bg-white p-5 shadow-card"><h3 className="font-semibold text-ink">模拟预订流程</h3><p className="mt-2 text-sm text-slate-600">选择方案、附加服务、确认费用并提交模拟预订。</p></div></section>
         </>
       ) : (
         <div className="grid min-h-[680px] gap-5 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
-          <div className="space-y-4"><RateSearchForm compact criteria={criteria} locations={rateLocations} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={runSearch} /><RateFilters carriers={carriers} filters={filters} resultCount={filteredOptions.length} onChange={setFilters} onClear={() => setFilters(initialFilters)} /></div>
-          <RateResultList options={filteredOptions} selectedId={selectedId} criteria={criteria} isLoading={isLoading} sort={sort} onSortChange={setSort} onSelect={(option) => setSelectedId(option.id)} />
+          <div className="space-y-4"><RateSearchForm compact criteria={criteria} locations={locations} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={runSearch} /><RateFilters carriers={carriers} filters={filters} resultCount={filteredOptions.length} onChange={setFilters} onClear={() => setFilters(initialFilters)} /></div>
+          <RateResultList options={filteredOptions} selectedId={selectedId} criteria={criteria} isLoading={isLoading} sort={sort} onSortChange={setSort} onSelect={(option) => { if (!option.expired) setSelectedId(option.id); }} />
           <RateSummaryPanel option={selectedOption} containers={criteria.containers} calculation={calculation} onOpenQuote={() => setIsQuoteOpen(true)} />
         </div>
       )}
@@ -117,5 +158,3 @@ export function RatesShell() {
     </PageContainer>
   );
 }
-
-

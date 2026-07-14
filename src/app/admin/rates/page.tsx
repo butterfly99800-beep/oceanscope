@@ -1,6 +1,5 @@
-﻿import { AdminResourcePage } from "@/features/admin/components/AdminResourcePage";
-import { resourceConfigs } from "@/features/admin/data/mock-admin-data";
+﻿import { AdminDatabaseResourcePage } from "@/features/admin/components/AdminDatabaseResourcePage";
 
-export default function AdminratesPage() {
-  return <AdminResourcePage config={resourceConfigs.rates} />;
+export default function AdminRatesPage() {
+  return <AdminDatabaseResourcePage resource="rates" />;
 }

@@ -1,4 +1,4 @@
-﻿import type { AdditionalServicesState, ContainerSelection, CostLineItem, QuoteCalculation, RateOption } from "@/features/rates/types";
+import type { AdditionalServicesState, ContainerSelection, CostLineItem, QuoteCalculation, RateOption } from "@/features/rates/types";
 
 const TAX_RATE_BASIS_POINTS = 850;
 
@@ -30,7 +30,8 @@ export function calculateQuote({
   services: AdditionalServicesState;
 }): QuoteCalculation {
   const units = Math.max(1, containerUnits(containers));
-  const items: CostLineItem[] = [
+  const hasDatabaseLineItems = Boolean(option.fixedLineItems?.length);
+  const items: CostLineItem[] = hasDatabaseLineItems ? option.fixedLineItems!.map((item) => ({ ...item })) : [
     line("基础费用", "Ocean Freight", option.baseFreight, units),
     line("基础费用", "Documentation Fee", 8500, 1),
     line("基础费用", "Terminal Handling Charge", 18500, units),
@@ -44,7 +45,7 @@ export function calculateQuote({
   if (services.importCustoms) items.push(line("目的地费用", "Import Customs Clearance", 13500, 1));
   if (services.pickup) items.push(line("起运地费用", "Pickup Service", 38000, 1));
   if (services.delivery) items.push(line("目的地费用", "Delivery Service", 42000, 1));
-  if (isDangerous) items.push(line("其他费用", "Dangerous Goods Surcharge", 56000, units));
+  if (isDangerous && !hasDatabaseLineItems) items.push(line("其他费用", "Dangerous Goods Surcharge", 56000, units));
 
   if (services.insurance === "basic") items.push(line("其他费用", "Insurance", 26000, 1));
   if (services.insurance === "premium") items.push(line("其他费用", "Insurance", 52000, 1));
@@ -54,5 +55,5 @@ export function calculateQuote({
 
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const tax = roundCents((subtotal * TAX_RATE_BASIS_POINTS) / 10000);
-  return { baseFreight: option.baseFreight * units, lineItems: items, subtotal, tax, total: subtotal + tax, currency: "USD" };
+  return { baseFreight: hasDatabaseLineItems ? option.baseFreight : option.baseFreight * units, lineItems: items, subtotal, tax, total: subtotal + tax, currency: "USD" };
 }

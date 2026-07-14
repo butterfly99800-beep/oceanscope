@@ -1,31 +1,31 @@
-﻿import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 const ports = [
-  ["Shanghai", "上海", "CNSHA", "China", "CN", "East Asia", 31.2304, 121.4737],
-  ["Ningbo", "宁波", "CNNGB", "China", "CN", "East Asia", 29.8746, 121.5503],
-  ["Yantian", "盐田", "CNYTN", "China", "CN", "East Asia", 22.58, 114.27],
-  ["Shekou", "蛇口", "CNSHK", "China", "CN", "East Asia", 22.484, 113.913],
-  ["Qingdao", "青岛", "CNTAO", "China", "CN", "East Asia", 36.0671, 120.3826],
-  ["Xiamen", "厦门", "CNXMN", "China", "CN", "East Asia", 24.4798, 118.0894],
-  ["Singapore", "新加坡", "SGSIN", "Singapore", "SG", "Southeast Asia", 1.3521, 103.8198],
-  ["Los Angeles", "洛杉矶", "USLAX", "United States", "US", "North America West Coast", 34.0522, -118.2437],
-  ["Long Beach", "长滩", "USLGB", "United States", "US", "North America West Coast", 33.7701, -118.1937],
-  ["Rotterdam", "鹿特丹", "NLRTM", "Netherlands", "NL", "Europe", 51.9244, 4.4777],
-  ["Hamburg", "汉堡", "DEHAM", "Germany", "DE", "Europe", 53.5511, 9.9937],
-  ["Busan", "釜山", "KRPUS", "South Korea", "KR", "East Asia", 35.1796, 129.0756],
+  ["Shanghai", "\u4e0a\u6d77", "CNSHA", "China", "CN", "East Asia", 31.2304, 121.4737],
+  ["Ningbo", "\u5b81\u6ce2", "CNNGB", "China", "CN", "East Asia", 29.8746, 121.5503],
+  ["Yantian", "\u76d0\u7530", "CNYTN", "China", "CN", "East Asia", 22.58, 114.27],
+  ["Shekou", "\u86c7\u53e3", "CNSHK", "China", "CN", "East Asia", 22.484, 113.913],
+  ["Qingdao", "\u9752\u5c9b", "CNTAO", "China", "CN", "East Asia", 36.0671, 120.3826],
+  ["Xiamen", "\u53a6\u95e8", "CNXMN", "China", "CN", "East Asia", 24.4798, 118.0894],
+  ["Singapore", "\u65b0\u52a0\u5761", "SGSIN", "Singapore", "SG", "Southeast Asia", 1.3521, 103.8198],
+  ["Los Angeles", "\u6d1b\u6749\u77f6", "USLAX", "United States", "US", "North America West Coast", 34.0522, -118.2437],
+  ["Long Beach", "\u957f\u6ee9", "USLGB", "United States", "US", "North America West Coast", 33.7701, -118.1937],
+  ["Rotterdam", "\u9e7f\u7279\u4e39", "NLRTM", "Netherlands", "NL", "Europe", 51.9244, 4.4777],
+  ["Hamburg", "\u6c49\u5821", "DEHAM", "Germany", "DE", "Europe", 53.5511, 9.9937],
+  ["Busan", "\u91dc\u5c71", "KRPUS", "South Korea", "KR", "East Asia", 35.1796, 129.0756],
 ].map(([name, nameZh, locode, country, countryCode, region, latitude, longitude]) => ({ name: String(name), nameZh: String(nameZh), locode: String(locode), country: String(country), countryCode: String(countryCode), region: String(region), latitude: Number(latitude), longitude: Number(longitude) }));
 
 const carriers = [
-  ["OceanLink", "远链航运", "OLK", "Singapore"],
-  ["Pacific Star", "太平洋星航", "PST", "United States"],
-  ["BlueWave Shipping", "蓝浪航运", "BWS", "Netherlands"],
-  ["Global Horizon", "环球地平线", "GHN", "Germany"],
-  ["SeaBridge", "海桥航运", "SBD", "China"],
-  ["NorthStar Lines", "北星航线", "NSL", "Canada"],
-  ["Atlas Blue", "蓝图航运", "ABL", "Singapore"],
-  ["HarborOne", "港壹航运", "HBO", "South Korea"],
+  ["OceanLink", "OceanLink CN", "OLK", "Singapore"],
+  ["Pacific Star", "Pacific Star CN", "PST", "United States"],
+  ["BlueWave Shipping", "BlueWave CN", "BWS", "Netherlands"],
+  ["Global Horizon", "Global Horizon CN", "GHN", "Germany"],
+  ["SeaBridge", "SeaBridge CN", "SBD", "China"],
+  ["NorthStar Lines", "NorthStar CN", "NSL", "Canada"],
+  ["Atlas Blue", "Atlas Blue CN", "ABL", "Singapore"],
+  ["HarborOne", "HarborOne CN", "HBO", "South Korea"],
 ].map(([name, nameZh, code, country]) => ({ name: String(name), nameZh: String(nameZh), code: String(code), country: String(country) }));
 
 const routes = [
@@ -61,14 +61,24 @@ const schedules = [
   ["GHN", "CNSHA", "DEHAM", "North Europe Bridge", "Shanghai Hamburg", "GLOBAL RIVER", "GR418W", "2026-07-27T18:00:00Z", "2026-08-29T11:00:00Z", 33, false, "Weekly / Mon", "Waigaoqiao", "CTA", 80, "NORMAL", 0, ["KRPUS", "NLRTM"]],
 ];
 
+const containerRateFactors = { TWENTY_GP: 0.72, FORTY_GP: 1, FORTY_HC: 1.12, FORTY_FIVE_HC: 1.28 };
+const rateGroups = [
+  ["PST", "CNSHA", "USLAX", "Pacific Arrow", "PACIFIC BRIDGE", "PB193E", "2026-07-18T18:30:00Z", 14, true, 0, 94, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-15T23:59:59Z", 2780],
+  ["OLK", "CNYTN", "USLGB", "ZEX Express", "EVER GLORY", "EG512E", "2026-07-17T22:00:00Z", 13, true, 0, 92, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-12T23:59:59Z", 2650],
+  ["BWS", "CNNGB", "NLRTM", "Eurasia Loop", "BLUE HORIZON", "BH728W", "2026-07-19T15:00:00Z", 31, false, 1, 91, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-20T23:59:59Z", 3920],
+  ["GHN", "CNSHA", "DEHAM", "North Europe Bridge", "GLOBAL DAWN", "GD306W", "2026-07-20T20:00:00Z", 32, false, 1, 86, "ACTIVE", "2026-07-01T00:00:00Z", "2026-07-19T23:59:59Z", 4080],
+  ["SBD", "CNTAO", "USLAX", "North China West Coast", "SEA BRIDGE", "SB118E", "2026-07-18T23:00:00Z", 17, false, 1, 82, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-18T23:59:59Z", 3020],
+  ["BWS", "SGSIN", "NLRTM", "Ocean Bridge", "OCEAN STAR", "OS420W", "2026-07-23T12:00:00Z", 23, true, 0, 90, "EXPIRED", "2026-06-01T00:00:00Z", "2026-07-10T23:59:59Z", 3440],
+];
+
 const date = (value) => new Date(value);
 const addHours = (value, hours) => new Date(date(value).getTime() + hours * 60 * 60 * 1000);
 const addDays = (value, days) => new Date(date(value).getTime() + days * 24 * 60 * 60 * 1000);
+const money = (value) => Number(value.toFixed(2));
 
-async function main() {
+async function seedCore() {
   for (const port of ports) await prisma.port.upsert({ where: { locode: port.locode }, update: port, create: port });
   for (const carrier of carriers) await prisma.carrier.upsert({ where: { code: carrier.code }, update: carrier, create: carrier });
-
   for (const [name, serviceName, carrierCode, originCode, destinationCode, direct, averageTransitDays, transitCodes] of routes) {
     const carrier = await prisma.carrier.findUniqueOrThrow({ where: { code: String(carrierCode) } });
     const originPort = await prisma.port.findUniqueOrThrow({ where: { locode: String(originCode) } });
@@ -81,7 +91,9 @@ async function main() {
       await prisma.routeTransitPort.create({ data: { routeId: route.id, portId: port.id, sequence: index + 1 } });
     }
   }
+}
 
+async function seedSchedules() {
   for (const item of schedules) {
     const [carrierCode, originCode, destinationCode, serviceName, routeName, vesselName, voyageNumber, etd, eta, transitDays, direct, frequency, originTerminal, destinationTerminal, reliability, status, delayHours, transitCodes] = item;
     const carrier = await prisma.carrier.findUniqueOrThrow({ where: { code: String(carrierCode) } });
@@ -95,7 +107,6 @@ async function main() {
       update: { routeId: route?.id, serviceName: String(serviceName), routeName: String(routeName), eta: etaDate, transitDays: Number(transitDays), direct: Boolean(direct), stopCount: transitCodes.length, frequency: String(frequency), originTerminal: String(originTerminal), destinationTerminal: String(destinationTerminal), cyOpenTime: addDays(etd, -5), siCutOffTime: addDays(etd, -2), vgmCutOffTime: addDays(etd, -1), customsCutOffTime: addDays(etd, -1), estimatedBerthingTime: addHours(etd, -8), departureReliability: Number(reliability), status: String(status), delayHours: Number(delayHours), originalEtd: Number(delayHours) ? addHours(etd, -Number(delayHours)) : null, originalEta: Number(delayHours) ? addHours(eta, -Number(delayHours)) : null, lastUpdatedAt: new Date() },
       create: { carrierId: carrier.id, routeId: route?.id, serviceName: String(serviceName), routeName: String(routeName), vesselName: String(vesselName), voyageNumber: String(voyageNumber), originPortId: originPort.id, destinationPortId: destinationPort.id, etd: etdDate, eta: etaDate, transitDays: Number(transitDays), direct: Boolean(direct), stopCount: transitCodes.length, frequency: String(frequency), originTerminal: String(originTerminal), destinationTerminal: String(destinationTerminal), cyOpenTime: addDays(etd, -5), siCutOffTime: addDays(etd, -2), vgmCutOffTime: addDays(etd, -1), customsCutOffTime: addDays(etd, -1), estimatedBerthingTime: addHours(etd, -8), departureReliability: Number(reliability), status: String(status), delayHours: Number(delayHours), originalEtd: Number(delayHours) ? addHours(etd, -Number(delayHours)) : null, originalEta: Number(delayHours) ? addHours(eta, -Number(delayHours)) : null, lastUpdatedAt: new Date() },
     });
-
     await prisma.scheduleTransitPort.deleteMany({ where: { scheduleId: schedule.id } });
     await prisma.scheduleRouteNode.deleteMany({ where: { scheduleId: schedule.id } });
     await prisma.scheduleRouteNode.create({ data: { scheduleId: schedule.id, portId: originPort.id, sequence: 1, nodeType: "ORIGIN", departureTime: etdDate, terminal: String(originTerminal) } });
@@ -103,11 +114,46 @@ async function main() {
       const port = await prisma.port.findUniqueOrThrow({ where: { locode: String(locode) } });
       const arrival = addDays(etd, Math.max(2, Math.round(Number(transitDays) * ((index + 1) / (transitCodes.length + 1)))));
       const departure = addHours(arrival, 30 + index * 6);
-      await prisma.scheduleTransitPort.create({ data: { scheduleId: schedule.id, portId: port.id, sequence: index + 1, arrivalTime: arrival, departureTime: departure, waitingHours: Math.round((departure.getTime() - arrival.getTime()) / 3600000), vesselName: String(vesselName), voyageNumber: String(voyageNumber), terminal: locode === "SGSIN" ? "Pasir Panjang" : locode === "KRPUS" ? "PNIT" : "RWG" } });
-      await prisma.scheduleRouteNode.create({ data: { scheduleId: schedule.id, portId: port.id, sequence: index + 2, nodeType: "TRANSIT", arrivalTime: arrival, departureTime: departure, terminal: locode === "SGSIN" ? "Pasir Panjang" : locode === "KRPUS" ? "PNIT" : "RWG" } });
+      await prisma.scheduleTransitPort.create({ data: { scheduleId: schedule.id, portId: port.id, sequence: index + 1, arrivalTime: arrival, departureTime: departure, waitingHours: Math.round((departure.getTime() - arrival.getTime()) / 3600000), vesselName: String(vesselName), voyageNumber: String(voyageNumber), terminal: String(locode) } });
+      await prisma.scheduleRouteNode.create({ data: { scheduleId: schedule.id, portId: port.id, sequence: index + 2, nodeType: "TRANSIT", arrivalTime: arrival, departureTime: departure, terminal: String(locode) } });
     }
     await prisma.scheduleRouteNode.create({ data: { scheduleId: schedule.id, portId: destinationPort.id, sequence: transitCodes.length + 2, nodeType: "DESTINATION", arrivalTime: etaDate, terminal: String(destinationTerminal) } });
   }
+}
+
+async function replaceRateItems(rateQuoteId, quote) {
+  await prisma.rateLineItem.deleteMany({ where: { rateQuoteId } });
+  const items = [["BASE", "OCEAN_FREIGHT", "Ocean Freight", "PER_CONTAINER", quote.baseFreight], ["SURCHARGE", "FUEL", "Fuel Surcharge", "PER_SHIPMENT", quote.fuelSurcharge], ["ORIGIN", "THC", "Terminal Handling Charge", "PER_CONTAINER", quote.terminalHandlingCharge], ["BASE", "DOC", "Documentation Fee", "PER_SHIPMENT", quote.documentationFee], ["BASE", "BOOKING", "Booking Fee", "PER_SHIPMENT", quote.bookingFee], ["SURCHARGE", "DG", "Dangerous Goods Surcharge", "PER_CONTAINER", quote.dangerousGoodsSurcharge], ["SURCHARGE", "OTHER", "Other Surcharge", "PER_SHIPMENT", quote.otherSurcharge]];
+  await prisma.rateLineItem.createMany({ data: items.filter(([, , , , amount]) => amount > 0).map(([category, code, name, unit, unitPrice]) => ({ rateQuoteId, category, code, name, unit, unitPrice, currency: quote.currency, required: true })) });
+}
+
+async function seedRateQuotes() {
+  for (const group of rateGroups) {
+    const [carrierCode, originCode, destinationCode, serviceName, vesselName, voyageNumber, etd, transitDays, direct, stopCount, reliability, status, effectiveFrom, validUntil, basePrice] = group;
+    const carrier = await prisma.carrier.findUniqueOrThrow({ where: { code: String(carrierCode) } });
+    const originPort = await prisma.port.findUniqueOrThrow({ where: { locode: String(originCode) } });
+    const destinationPort = await prisma.port.findUniqueOrThrow({ where: { locode: String(destinationCode) } });
+    const route = await prisma.route.findFirst({ where: { carrierId: carrier.id, originPortId: originPort.id, destinationPortId: destinationPort.id } });
+    for (const [containerType, factor] of Object.entries(containerRateFactors)) {
+      const baseFreight = money(Number(basePrice) * Number(factor));
+      const fuelSurcharge = money(baseFreight * 0.12);
+      const terminalHandlingCharge = money(180 + Number(factor) * 45);
+      const documentationFee = 85;
+      const bookingFee = 65;
+      const dangerousGoodsSurcharge = money(420 * Number(factor));
+      const otherSurcharge = direct ? 35 : 95;
+      const totalBasePrice = money(baseFreight + fuelSurcharge + terminalHandlingCharge + documentationFee + bookingFee + otherSurcharge);
+      const quoteData = { carrierId: carrier.id, routeId: route?.id, originPortId: originPort.id, destinationPortId: destinationPort.id, serviceName: String(serviceName), transportMode: "FCL", containerType, currency: "USD", baseFreight, fuelSurcharge, terminalHandlingCharge, documentationFee, bookingFee, dangerousGoodsSurcharge, otherSurcharge, totalBasePrice, effectiveFrom: date(effectiveFrom), validUntil: date(validUntil), transitDays: Number(transitDays), direct: Boolean(direct), stopCount: Number(stopCount), vesselName: String(vesselName), voyageNumber: String(voyageNumber), etd: date(etd), eta: addDays(etd, Number(transitDays)), cutOffDate: addDays(etd, -2), freeDays: direct ? 7 : 10, reliability: Number(reliability), status: String(status) };
+      const quote = await prisma.rateQuote.upsert({ where: { carrierId_originPortId_destinationPortId_serviceName_containerType_effectiveFrom_validUntil: { carrierId: carrier.id, originPortId: originPort.id, destinationPortId: destinationPort.id, serviceName: String(serviceName), containerType, effectiveFrom: quoteData.effectiveFrom, validUntil: quoteData.validUntil } }, update: quoteData, create: quoteData });
+      await replaceRateItems(quote.id, quoteData);
+    }
+  }
+}
+
+async function main() {
+  await seedCore();
+  await seedSchedules();
+  await seedRateQuotes();
 }
 
 main().then(async () => prisma.$disconnect()).catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });
