@@ -300,6 +300,32 @@ model RateLineItem {
   @@index([category])
 }
 
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String?        @db.VarChar(120)
+  email        String         @unique @db.VarChar(160)
+  passwordHash String         @db.VarChar(255)
+  role         UserRole       @default(CUSTOMER)
+  status       UserStatus     @default(ACTIVE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  lastLoginAt  DateTime?
+  orders       BookingOrder[]
+
+  @@index([role])
+  @@index([status])
+}
+
 enum BookingStatus {
   PENDING_CONFIRMATION
   CONFIRMED
@@ -311,6 +337,7 @@ model BookingOrder {
   id                String            @id @default(cuid())
   bookingNumber     String            @unique @db.VarChar(32)
   status            BookingStatus     @default(PENDING_CONFIRMATION)
+  userId            String?
   customerName      String?           @db.VarChar(120)
   customerEmail     String?           @db.VarChar(160)
   customerPhone     String?           @db.VarChar(60)
@@ -339,6 +366,7 @@ model BookingOrder {
   updatedAt         DateTime          @updatedAt
   confirmedAt       DateTime?
   cancelledAt       DateTime?
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   originPort        Port              @relation("BookingOriginPort", fields: [originPortId], references: [id], onDelete: Restrict)
   destinationPort   Port              @relation("BookingDestinationPort", fields: [destinationPortId], references: [id], onDelete: Restrict)
   carrier           Carrier           @relation(fields: [carrierId], references: [id], onDelete: Restrict)
@@ -350,6 +378,7 @@ model BookingOrder {
   timeline          BookingTimeline[]
 
   @@index([status])
+  @@index([userId])
   @@index([originPortId])
   @@index([destinationPortId])
   @@index([carrierId])

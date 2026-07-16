@@ -1,10 +1,13 @@
 ﻿import { Prisma } from "@prisma/client";
+import { requireAdminForApi } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { handlePrismaError, jsonData, jsonList, parsePagination, validationError } from "@/features/admin/server/api-utils";
 import { containerValues, ensureRateRelations, rateData, rateSchema, replaceRateLineItems, statusValues } from "@/features/rates/server/admin-rate-api";
 import { mapAdminRate, rateInclude } from "@/features/rates/server/rate-mapper";
 
 export async function GET(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, sortOrder } = parsePagination(searchParams);
@@ -32,6 +35,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const parsed = rateSchema.safeParse(await request.json());
     if (!parsed.success) return validationError(parsed.error);

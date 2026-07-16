@@ -4,6 +4,11 @@ import { z } from "zod";
 
 export type SortOrder = "asc" | "desc";
 export type ApiErrorCode =
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "EMAIL_ALREADY_EXISTS"
+  | "INVALID_CREDENTIALS"
+  | "USER_DISABLED"
   | "BAD_REQUEST"
   | "PORT_NOT_FOUND"
   | "CARRIER_NOT_FOUND"

@@ -2,19 +2,24 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonList, parsePagination } from "@/features/admin/server/api-utils";
 import { mapOrder, orderInclude } from "@/features/orders/server/order-mapper";
+import { requireUserForApi } from "@/lib/authorization";
 
 const statusMap: Record<string, BookingStatus> = { PENDING_CONFIRMATION: "PENDING_CONFIRMATION", CONFIRMED: "CONFIRMED", CANCELLED: "CANCELLED", COMPLETED: "COMPLETED" };
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireUserForApi();
+    if (auth.response) return auth.response;
+    const currentUser = auth.user;
+    if (!currentUser) return jsonError("UNAUTHORIZED", "Please sign in first", 401);
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, sortOrder } = parsePagination(searchParams);
     const search = searchParams.get("search")?.trim();
     const status = searchParams.get("status")?.trim();
     const sortBy = searchParams.get("sortBy") ?? "createdAt";
     const sortable = new Set(["createdAt", "updatedAt", "total"]);
-    // TODO: Filter by current user after authentication is added.
     const where: Prisma.BookingOrderWhereInput = {
+      userId: currentUser.id,
       ...(status && statusMap[status] ? { status: statusMap[status] } : {}),
       ...(search ? { OR: [{ bookingNumber: { contains: search } }, { originPort: { name: { contains: search } } }, { destinationPort: { name: { contains: search } } }, { carrier: { name: { contains: search } } }] } : {}),
     };

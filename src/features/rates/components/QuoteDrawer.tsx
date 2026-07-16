@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AdditionalServices } from "@/features/rates/components/AdditionalServices";
 import { BookingConfirmation } from "@/features/rates/components/BookingConfirmation";
@@ -11,6 +12,7 @@ import { calculateQuote, formatMoney } from "@/features/rates/lib/calculateQuote
 import type { AdditionalServicesState, ContainerSelection, RateOption } from "@/features/rates/types";
 
 export function QuoteDrawer({ isOpen, option, containers, isDangerous, readyDate, services, onServicesChange, onClose, onBackToResults, onOrderSaved }: { isOpen: boolean; option: RateOption | null; containers: ContainerSelection; isDangerous: boolean; readyDate: string; services: AdditionalServicesState; onServicesChange: (services: AdditionalServicesState) => void; onClose: () => void; onBackToResults: () => void; onOrderSaved: (order: BookingOrder) => void }) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [order, setOrder] = useState<BookingOrder | null>(null);
   const [saveError, setSaveError] = useState("");
@@ -48,6 +50,10 @@ export function QuoteDrawer({ isOpen, option, containers, isDangerous, readyDate
         }),
       });
       const payload = await response.json() as { data?: BookingOrder; error?: { message: string } };
+      if (response.status === 401) {
+        router.push("/login?callbackUrl=/rates");
+        return;
+      }
       if (!response.ok || !payload.data) {
         setSaveError(payload.error?.message ?? "Booking submission failed. Please retry.");
         return;

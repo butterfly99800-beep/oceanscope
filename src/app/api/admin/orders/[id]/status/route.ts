@@ -1,4 +1,5 @@
 import { BookingStatus } from "@prisma/client";
+import { requireAdminForApi } from "@/lib/authorization";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { jsonData, jsonError } from "@/features/admin/server/api-utils";
@@ -8,6 +9,8 @@ const schema = z.object({ status: z.enum(["PENDING_CONFIRMATION", "CONFIRMED", "
 const allowed: Record<BookingStatus, BookingStatus[]> = { PENDING_CONFIRMATION: ["CONFIRMED", "CANCELLED"], CONFIRMED: ["COMPLETED", "CANCELLED"], CANCELLED: [], COMPLETED: [] };
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const parsed = schema.safeParse(await request.json());

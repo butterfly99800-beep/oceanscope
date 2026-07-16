@@ -5,6 +5,7 @@ import { jsonData, jsonError } from "@/features/admin/server/api-utils";
 import { calculateBookingTotal, centsToDecimal } from "@/features/orders/server/calculate-booking-total";
 import { mapOrder, orderInclude } from "@/features/orders/server/order-mapper";
 import { rateInclude } from "@/features/rates/server/rate-mapper";
+import { requireUserForApi } from "@/lib/authorization";
 
 const containerSchema = z.object({ type: z.string(), quantity: z.coerce.number().int().positive() });
 const servicesSchema = z.object({ exportCustoms: z.boolean().default(false), importCustoms: z.boolean().default(false), pickup: z.boolean().default(false), delivery: z.boolean().default(false), insurance: z.enum(["none", "basic", "premium"]).default("none"), freeDays: z.enum(["standard", "plus5", "plus10", "plus15"]).default("standard") });
@@ -40,7 +41,7 @@ async function nextBookingNumber(tx: Prisma.TransactionClient) {
   return `OCS-${today}-${String(count + 1).padStart(4, "0")}`;
 }
 
-async function createWithRetry(data: z.infer<typeof bookingSchema>) {
+async function createWithRetry(data: z.infer<typeof bookingSchema>, userId: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -57,6 +58,7 @@ async function createWithRetry(data: z.infer<typeof bookingSchema>) {
         const order = await tx.bookingOrder.create({ data: {
           bookingNumber,
           status: "PENDING_CONFIRMATION",
+          userId,
           originPortId: data.originPortId,
           destinationPortId: data.destinationPortId,
           carrierId: data.carrierId,
@@ -98,9 +100,13 @@ async function createWithRetry(data: z.infer<typeof bookingSchema>) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireUserForApi();
+    if (auth.response) return auth.response;
+    const currentUser = auth.user;
+    if (!currentUser) return jsonError("UNAUTHORIZED", "Please sign in first", 401);
     const parsed = bookingSchema.safeParse(await request.json());
     if (!parsed.success) return jsonError("BAD_REQUEST", parsed.error.issues[0]?.message ?? "Invalid request", 400);
-    const order = await createWithRetry(parsed.data);
+    const order = await createWithRetry(parsed.data, currentUser.id);
     return jsonData(mapOrder(order), { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN";

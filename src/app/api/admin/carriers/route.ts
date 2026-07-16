@@ -1,4 +1,5 @@
 ﻿import { Prisma } from "@prisma/client";
+import { requireAdminForApi } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { carrierSchema, handlePrismaError, jsonData, jsonList, parsePagination, statusToDb, statusToLabel, validationError } from "@/features/admin/server/api-utils";
 
@@ -19,6 +20,8 @@ function toCarrierRecord(carrier: Awaited<ReturnType<typeof prisma.carrier.findM
 }
 
 export async function GET(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, sortOrder } = parsePagination(searchParams);
@@ -47,6 +50,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const parsed = carrierSchema.safeParse(await request.json());
     if (!parsed.success) return validationError(parsed.error);

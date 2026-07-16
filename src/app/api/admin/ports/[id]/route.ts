@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireAdminForApi } from "@/lib/authorization";
 import { handlePrismaError, jsonData, jsonError, portSchema, statusToLabel, validationError } from "@/features/admin/server/api-utils";
 
 function toPortRecord(port: NonNullable<Awaited<ReturnType<typeof prisma.port.findUnique>>>) {
@@ -6,6 +7,8 @@ function toPortRecord(port: NonNullable<Awaited<ReturnType<typeof prisma.port.fi
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const port = await prisma.port.findUnique({ where: { id } });
@@ -15,6 +18,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const parsed = portSchema.safeParse(await request.json());
@@ -25,6 +30,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const [linkedRoutes, linkedSchedules, linkedRates, linkedOrders] = await Promise.all([

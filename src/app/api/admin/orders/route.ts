@@ -1,4 +1,5 @@
 ﻿import { BookingStatus, Prisma } from "@prisma/client";
+import { requireAdminForApi } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonList, parsePagination } from "@/features/admin/server/api-utils";
 import { mapAdminOrder, orderInclude } from "@/features/orders/server/order-mapper";
@@ -6,6 +7,8 @@ import { mapAdminOrder, orderInclude } from "@/features/orders/server/order-mapp
 const statusMap: Record<string, BookingStatus> = { PENDING_CONFIRMATION: "PENDING_CONFIRMATION", CONFIRMED: "CONFIRMED", CANCELLED: "CANCELLED", COMPLETED: "COMPLETED" };
 
 export async function GET(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, sortOrder } = parsePagination(searchParams);

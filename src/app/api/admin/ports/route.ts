@@ -1,4 +1,5 @@
 ﻿import { Prisma } from "@prisma/client";
+import { requireAdminForApi } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { handlePrismaError, jsonData, jsonList, parsePagination, portSchema, statusToDb, statusToLabel, validationError } from "@/features/admin/server/api-utils";
 
@@ -21,6 +22,8 @@ function toPortRecord(port: Awaited<ReturnType<typeof prisma.port.findMany>>[num
 }
 
 export async function GET(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, sortOrder } = parsePagination(searchParams);
@@ -51,6 +54,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const parsed = portSchema.safeParse(await request.json());
     if (!parsed.success) return validationError(parsed.error);

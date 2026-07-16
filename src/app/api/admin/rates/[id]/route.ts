@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { requireAdminForApi } from "@/lib/authorization";
 import { handlePrismaError, jsonData, jsonError, validationError } from "@/features/admin/server/api-utils";
 import { ensureRateRelations, rateData, rateSchema, replaceRateLineItems } from "@/features/rates/server/admin-rate-api";
 import { mapAdminRate, rateInclude } from "@/features/rates/server/rate-mapper";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const quote = await prisma.rateQuote.findUnique({ where: { id }, include: rateInclude });
@@ -13,6 +16,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const parsed = rateSchema.safeParse(await request.json());
@@ -27,6 +32,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const linkedOrders = await prisma.bookingOrder.count({ where: { rateQuoteId: id } });

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireAdminForApi } from "@/lib/authorization";
 import { carrierSchema, handlePrismaError, jsonData, jsonError, statusToLabel, validationError } from "@/features/admin/server/api-utils";
 
 function toCarrierRecord(carrier: NonNullable<Awaited<ReturnType<typeof prisma.carrier.findUnique>>>) {
@@ -14,6 +15,8 @@ function toCarrierRecord(carrier: NonNullable<Awaited<ReturnType<typeof prisma.c
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const carrier = await prisma.carrier.findUnique({ where: { id } });
@@ -25,6 +28,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const parsed = carrierSchema.safeParse(await request.json());
@@ -37,6 +42,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const adminAuth = await requireAdminForApi();
+  if (adminAuth.response) return adminAuth.response;
   try {
     const { id } = await params;
     const [linkedRoutes, linkedSchedules, linkedRates, linkedOrders] = await Promise.all([prisma.route.count({ where: { carrierId: id } }), prisma.sailingSchedule.count({ where: { carrierId: id } }), prisma.rateQuote.count({ where: { carrierId: id } }), prisma.bookingOrder.count({ where: { carrierId: id } })]);

@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 
 const prisma = new PrismaClient();
 
@@ -76,6 +78,31 @@ const addHours = (value, hours) => new Date(date(value).getTime() + hours * 60 *
 const addDays = (value, days) => new Date(date(value).getTime() + days * 24 * 60 * 60 * 1000);
 const money = (value) => Number(value.toFixed(2));
 
+function seedPassword(envName) {
+  const value = process.env[envName];
+  if (value) return value;
+  const generated = randomBytes(12).toString('base64url');
+  console.warn(envName + ' is not set. Generated one-time seed password: ' + generated);
+  return generated;
+}
+
+async function seedUsers() {
+  const adminHash = await bcrypt.hash(seedPassword('SEED_ADMIN_PASSWORD'), 12);
+  const customerHash = await bcrypt.hash(seedPassword('SEED_CUSTOMER_PASSWORD'), 12);
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@oceanscope.local' },
+    update: { name: 'OceanScope Admin', passwordHash: adminHash, role: 'ADMIN', status: 'ACTIVE' },
+    create: { name: 'OceanScope Admin', email: 'admin@oceanscope.local', passwordHash: adminHash, role: 'ADMIN', status: 'ACTIVE' },
+  });
+  const customer = await prisma.user.upsert({
+    where: { email: 'customer@oceanscope.local' },
+    update: { name: 'Demo Customer', passwordHash: customerHash, role: 'CUSTOMER', status: 'ACTIVE' },
+    create: { name: 'Demo Customer', email: 'customer@oceanscope.local', passwordHash: customerHash, role: 'CUSTOMER', status: 'ACTIVE' },
+  });
+  await prisma.bookingOrder.updateMany({ where: { userId: null }, data: { userId: customer.id } });
+  return { admin, customer };
+}
+
 async function seedCore() {
   for (const port of ports) await prisma.port.upsert({ where: { locode: port.locode }, update: port, create: port });
   for (const carrier of carriers) await prisma.carrier.upsert({ where: { code: carrier.code }, update: carrier, create: carrier });
@@ -151,7 +178,7 @@ async function seedRateQuotes() {
 }
 
 
-async function seedBookingOrders() {
+async function seedBookingOrders(customerUserId) {
   const quotes = await prisma.rateQuote.findMany({ include: { lineItems: true, carrier: true, originPort: true, destinationPort: true, route: true }, orderBy: { createdAt: "asc" } });
   const usable = quotes.filter((quote) => quote.status === "ACTIVE").slice(0, 8);
   const statuses = ["PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED", "COMPLETED", "PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED", "COMPLETED"];
@@ -163,8 +190,8 @@ async function seedBookingOrders() {
     const total = money(subtotal + tax);
     const order = await prisma.bookingOrder.upsert({
       where: { bookingNumber },
-      update: { status: statuses[index], subtotal, tax, total, updatedAt: new Date() },
-      create: { bookingNumber, status: statuses[index], originPortId: quote.originPortId, destinationPortId: quote.destinationPortId, carrierId: quote.carrierId, routeId: quote.routeId, rateQuoteId: quote.id, serviceName: quote.serviceName, transportMode: quote.transportMode, cargoType: index % 3 === 0 ? 'dangerous' : 'general', readyDate: date('2026-07-14T00:00:00Z'), vesselName: quote.vesselName, voyageNumber: quote.voyageNumber, etd: quote.etd, eta: quote.eta, transitDays: quote.transitDays, stopCount: quote.stopCount, currency: quote.currency, subtotal, tax, total, quoteValidUntil: quote.validUntil, confirmedAt: statuses[index] === 'CONFIRMED' || statuses[index] === 'COMPLETED' ? new Date() : null, cancelledAt: statuses[index] === 'CANCELLED' ? new Date() : null },
+      update: { userId: customerUserId, status: statuses[index], subtotal, tax, total, updatedAt: new Date() },
+      create: { bookingNumber, status: statuses[index], userId: customerUserId, originPortId: quote.originPortId, destinationPortId: quote.destinationPortId, carrierId: quote.carrierId, routeId: quote.routeId, rateQuoteId: quote.id, serviceName: quote.serviceName, transportMode: quote.transportMode, cargoType: index % 3 === 0 ? 'dangerous' : 'general', readyDate: date('2026-07-14T00:00:00Z'), vesselName: quote.vesselName, voyageNumber: quote.voyageNumber, etd: quote.etd, eta: quote.eta, transitDays: quote.transitDays, stopCount: quote.stopCount, currency: quote.currency, subtotal, tax, total, quoteValidUntil: quote.validUntil, confirmedAt: statuses[index] === 'CONFIRMED' || statuses[index] === 'COMPLETED' ? new Date() : null, cancelledAt: statuses[index] === 'CANCELLED' ? new Date() : null },
     });
     await prisma.bookingContainer.deleteMany({ where: { orderId: order.id } });
     await prisma.bookingService.deleteMany({ where: { orderId: order.id } });
@@ -190,10 +217,11 @@ async function seedBookingOrders() {
 }
 
 async function main() {
+  const users = await seedUsers();
   await seedCore();
   await seedSchedules();
   await seedRateQuotes();
-  await seedBookingOrders();
+  await seedBookingOrders(users.customer.id);
 }
 
 main().then(async () => prisma.$disconnect()).catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });
