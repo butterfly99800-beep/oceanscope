@@ -1,5 +1,5 @@
 ﻿export type BookingStatus = string;
-export type OrderTimelineItem = { title: string; description: string; timestamp: string };
+export type OrderTimelineItem = { title: string; description: string; timestamp: string; actorName?: string; actorRole?: string };
 export type OrderRoute = { origin: string; destination: string; originPortCode: string; destinationPortCode: string; etd: string; eta: string; transitDays: number; stops: number };
 export type OrderCargo = { cargoType: "general" | "dangerous"; readyDate: string; containerSelections: Record<string, number> };
 export type OrderPriceSummary = { subtotal: number; tax: number; total: number; currency: "USD" };

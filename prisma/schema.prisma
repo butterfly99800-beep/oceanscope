@@ -321,6 +321,7 @@ model User {
   updatedAt    DateTime       @updatedAt
   lastLoginAt  DateTime?
   orders       BookingOrder[]
+  timelineActions BookingTimeline[] @relation("BookingTimelineActor")
 
   @@index([role])
   @@index([status])
@@ -438,9 +439,14 @@ model BookingTimeline {
   title       String        @db.VarChar(120)
   description String?       @db.VarChar(255)
   occurredAt  DateTime
+  actorUserId String?
+  actorName   String?       @db.VarChar(160)
+  actorRole   UserRole?
   createdAt   DateTime      @default(now())
   order       BookingOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor       User?         @relation("BookingTimelineActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([status])
+  @@index([actorUserId])
 }

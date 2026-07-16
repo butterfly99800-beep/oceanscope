@@ -39,7 +39,7 @@ function mapCosts(order: OrderWithRelations): OrderCostLineItem[] {
 }
 
 function mapTimeline(order: OrderWithRelations): OrderTimelineItem[] {
-  return order.timeline.map((item) => ({ title: item.title, description: item.description ?? "", timestamp: item.occurredAt.toISOString() }));
+  return order.timeline.map((item) => ({ title: item.title, description: item.description ?? "", timestamp: item.occurredAt.toISOString(), actorName: item.actorName ?? undefined, actorRole: item.actorRole ?? undefined }));
 }
 
 export function mapOrder(order: OrderWithRelations): BookingOrder {

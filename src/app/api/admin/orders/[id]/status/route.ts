@@ -11,6 +11,8 @@ const allowed: Record<BookingStatus, BookingStatus[]> = { PENDING_CONFIRMATION: 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const adminAuth = await requireAdminForApi();
   if (adminAuth.response) return adminAuth.response;
+  const adminUser = adminAuth.user;
+  if (!adminUser) return jsonError("UNAUTHORIZED", "Please sign in first", 401);
   try {
     const { id } = await params;
     const parsed = schema.safeParse(await request.json());
@@ -21,7 +23,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       if (!current) throw new Error("ORDER_NOT_FOUND");
       if (!allowed[current.status].includes(parsed.data.status)) throw new Error("INVALID_STATUS_CHANGE");
       await tx.bookingOrder.update({ where: { id }, data: { status: parsed.data.status, confirmedAt: parsed.data.status === "CONFIRMED" ? now : current.confirmedAt, cancelledAt: parsed.data.status === "CANCELLED" ? now : current.cancelledAt } });
-      await tx.bookingTimeline.create({ data: { orderId: id, status: parsed.data.status, title: `Status changed to ${parsed.data.status}`, description: "Updated from admin console.", occurredAt: now } });
+      await tx.bookingTimeline.create({ data: { orderId: id, status: parsed.data.status, title: `Status changed to ${parsed.data.status}`, description: "Updated from admin console.", occurredAt: now, actorUserId: adminUser.id, actorName: adminUser.name || adminUser.email, actorRole: adminUser.role } });
       return tx.bookingOrder.findUniqueOrThrow({ where: { id }, include: orderInclude });
     });
     return jsonData(mapOrder(order));

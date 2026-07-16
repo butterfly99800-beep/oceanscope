@@ -7,6 +7,15 @@ import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { navItems } from "@/lib/navigation";
 
+const authText = {
+  login: "\u767b\u5f55",
+  register: "\u6ce8\u518c",
+  account: "\u4e2a\u4eba\u4e2d\u5fc3",
+  orders: "\u6211\u7684\u8ba2\u5355",
+  admin: "\u7ba1\u7406\u540e\u53f0",
+  signOut: "\u9000\u51fa\u767b\u5f55",
+};
+
 function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
@@ -14,8 +23,8 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   if (!session?.user) {
     return (
       <>
-        <Link href="/login" onClick={onNavigate} className="rounded-md px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">??</Link>
-        <Link href="/register" onClick={onNavigate} className="rounded-md bg-gradient-to-r from-ocean-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">??</Link>
+        <Link href="/login" onClick={onNavigate} className="rounded-md px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">{authText.login}</Link>
+        <Link href="/register" onClick={onNavigate} className="rounded-md bg-gradient-to-r from-ocean-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">{authText.register}</Link>
       </>
     );
   }
@@ -28,9 +37,10 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
       </button>
       {open ? (
         <div className="absolute right-0 top-full z-[1200] mt-2 w-48 rounded-lg border border-slate-200 bg-white p-2 text-ink shadow-xl">
-          <Link href="/orders" onClick={() => { setOpen(false); onNavigate?.(); }} className="block rounded-md px-3 py-2 text-sm font-semibold hover:bg-ocean-50">????</Link>
-          <button type="button" disabled className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-400">????</button>
-          <button type="button" onClick={() => void signOut({ callbackUrl: "/" })} className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50">????</button>
+          <Link href="/account" onClick={() => { setOpen(false); onNavigate?.(); }} className="block rounded-md px-3 py-2 text-sm font-semibold hover:bg-ocean-50">{authText.account}</Link>
+          <Link href="/orders" onClick={() => { setOpen(false); onNavigate?.(); }} className="block rounded-md px-3 py-2 text-sm font-semibold hover:bg-ocean-50">{authText.orders}</Link>
+          {session.user.role === "ADMIN" ? <Link href="/admin" onClick={() => { setOpen(false); onNavigate?.(); }} className="block rounded-md px-3 py-2 text-sm font-semibold hover:bg-ocean-50">{authText.admin}</Link> : null}
+          <button type="button" onClick={() => void signOut({ callbackUrl: "/" })} className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50">{authText.signOut}</button>
         </div>
       ) : null}
     </div>

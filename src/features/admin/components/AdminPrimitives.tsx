@@ -3,6 +3,9 @@
 const styles: Record<string, string> = {
   Active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   ACTIVE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  DISABLED: "bg-rose-50 text-rose-700 ring-rose-200",
+  ADMIN: "bg-violet-50 text-violet-700 ring-violet-200",
+  CUSTOMER: "bg-ocean-50 text-ocean-700 ring-ocean-200",
   Inactive: "bg-slate-100 text-slate-600 ring-slate-200",
   INACTIVE: "bg-slate-100 text-slate-600 ring-slate-200",
   Expired: "bg-slate-100 text-slate-600 ring-slate-200",

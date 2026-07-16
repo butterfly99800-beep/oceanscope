@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -6,7 +6,7 @@ import { Bell, Database, Home, Menu, Search, Ship, X } from "lucide-react";
 import { useState } from "react";
 
 const nav = [
-  ["/admin", "数据总览"], ["/admin/ports", "港口管理"], ["/admin/carriers", "船公司管理"], ["/admin/routes", "航线管理"], ["/admin/schedules", "船期管理"], ["/admin/rates", "运价管理"], ["/admin/orders", "订单管理"],
+  ["/admin", "数据总览"], ["/admin/ports", "港口管理"], ["/admin/carriers", "船公司管理"], ["/admin/routes", "航线管理"], ["/admin/schedules", "船期管理"], ["/admin/rates", "运价管理"], ["/admin/orders", "订单管理"], ["/admin/users", "用户管理"],
 ] as const;
 
 function titleFor(pathname: string) {
