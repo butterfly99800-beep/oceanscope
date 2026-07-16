@@ -6,7 +6,7 @@ export type SortOption = "recommended" | "price" | "fastest" | "earliestDepartur
 export type InsuranceOption = "none" | "basic" | "premium";
 export type FreeDaysOption = "standard" | "plus5" | "plus10" | "plus15";
 
-export type LocationOption = { id: string; name: string; country: string; region: string; type: LocationType; locode: string; aliases: string[] };
+export type LocationOption = { id: string; name: string; nameZh?: string | null; country?: string | null; countryCode?: string | null; region?: string | null; type?: LocationType | null; locode?: string | null; city?: string | null; address?: string | null; postalCode?: string | null; aliases?: string[] };
 export type ContainerSelection = Record<ContainerType, number>;
 export type RateSearchCriteria = { originId: string; destinationId: string; cargoReadyDate: string; transportMode: TransportMode; containers: ContainerSelection; cargoType: "general" | "dangerous" };
 export type CostLineItem = { category: string; name: string; unitPrice: number; quantity: number; subtotal: number };

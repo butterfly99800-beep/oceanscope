@@ -19,7 +19,7 @@ const initialCriteria: RateSearchCriteria = { originId: "", destinationId: "", c
 const initialFilters: RateFiltersState = { stops: "all", carriers: [], maxPrice: 9000, maxTransitDays: 35, minFreeDays: 0, minReliability: 70, departureFrom: "" };
 const initialServices: AdditionalServicesState = { exportCustoms: false, importCustoms: false, pickup: false, delivery: false, insurance: "none", freeDays: "standard" };
 
-type PortsSearchResponse = { data: Array<{ id: string; name: string; nameZh?: string; locode: string; country: string; region: string }> };
+type PortsSearchResponse = { data: Array<{ id: string; name?: string | null; nameZh?: string | null; locode?: string | null; code?: string | null; country?: string | null; countryCode?: string | null; region?: string | null; aliases?: string[] }> };
 type RateSearchResponse = { data: RateOption[] } | { error: { message: string } };
 
 function todayIso() {
@@ -30,14 +30,33 @@ function selectedContainerCount(containers: ContainerSelection) {
   return Object.values(containers).reduce((sum, count) => sum + count, 0);
 }
 
+const validationText = {
+  origin: "\u8bf7\u9009\u62e9\u6709\u6548\u8d77\u8fd0\u5730",
+  destination: "\u8bf7\u9009\u62e9\u6709\u6548\u76ee\u7684\u5730",
+  sameLocation: "\u8d77\u8fd0\u5730\u548c\u76ee\u7684\u5730\u4e0d\u80fd\u76f8\u540c",
+  readyDate: "\u8bf7\u9009\u62e9\u8d27\u597d\u65e5\u671f",
+  pastDate: "\u8d27\u597d\u65e5\u671f\u4e0d\u80fd\u65e9\u4e8e\u4eca\u5929",
+  containers: "\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u7bb1\u578b",
+  portType: "\u6e2f\u53e3",
+};
+
+function normalizeSearchValue(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function isKnownLocation(locations: LocationOption[], value: string) {
+  const query = normalizeSearchValue(value);
+  return locations.some((location) => location.id === value || normalizeSearchValue(location.name) === query || normalizeSearchValue(location.locode) === query);
+}
+
 function validate(criteria: RateSearchCriteria, locations: LocationOption[]): ValidationErrors {
   const errors: ValidationErrors = {};
-  if (!locations.some((location) => location.id === criteria.originId || location.name.toLowerCase() === criteria.originId.toLowerCase() || location.locode.toLowerCase() === criteria.originId.toLowerCase())) errors.originId = "请选择有效起运地";
-  if (!locations.some((location) => location.id === criteria.destinationId || location.name.toLowerCase() === criteria.destinationId.toLowerCase() || location.locode.toLowerCase() === criteria.destinationId.toLowerCase())) errors.destinationId = "请选择有效目的地";
-  if (criteria.originId && criteria.destinationId && criteria.originId === criteria.destinationId) errors.destinationId = "起运地和目的地不能相同";
-  if (!criteria.cargoReadyDate) errors.cargoReadyDate = "请选择货好日期";
-  if (criteria.cargoReadyDate && criteria.cargoReadyDate < todayIso()) errors.cargoReadyDate = "货好日期不能早于今天";
-  if (selectedContainerCount(criteria.containers) <= 0) errors.containers = "至少选择一个箱型";
+  if (!isKnownLocation(locations, criteria.originId)) errors.originId = validationText.origin;
+  if (!isKnownLocation(locations, criteria.destinationId)) errors.destinationId = validationText.destination;
+  if (criteria.originId && criteria.destinationId && criteria.originId === criteria.destinationId) errors.destinationId = validationText.sameLocation;
+  if (!criteria.cargoReadyDate) errors.cargoReadyDate = validationText.readyDate;
+  if (criteria.cargoReadyDate && criteria.cargoReadyDate < todayIso()) errors.cargoReadyDate = validationText.pastDate;
+  if (selectedContainerCount(criteria.containers) <= 0) errors.containers = validationText.containers;
   return errors;
 }
 
@@ -67,7 +86,19 @@ function containersForApi(containers: ContainerSelection) {
 }
 
 function mapPortLocation(port: PortsSearchResponse["data"][number]): LocationOption {
-  return { id: port.id, name: port.name, country: port.country, region: port.region, type: "港口", locode: port.locode, aliases: [port.nameZh ?? "", port.locode, port.country].filter(Boolean) };
+  const locode = port.locode ?? port.code ?? "";
+  const name = port.name ?? port.nameZh ?? locode;
+  return {
+    id: port.id,
+    name,
+    nameZh: port.nameZh ?? null,
+    country: port.country ?? null,
+    countryCode: port.countryCode ?? null,
+    region: port.region ?? null,
+    type: validationText.portType,
+    locode,
+    aliases: [name, port.nameZh ?? "", locode, port.country ?? "", port.region ?? "", ...(Array.isArray(port.aliases) ? port.aliases : [])].filter((item): item is string => typeof item === "string" && item.length > 0),
+  };
 }
 
 export function RatesShell() {

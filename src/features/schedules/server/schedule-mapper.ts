@@ -97,5 +97,6 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
 }
 
 export function mapPortOption(port: { id: string; name: string; nameZh: string | null; country: string; countryCode: string | null; region: string; locode: string }) {
-  return { id: port.id, name: port.name, localName: port.nameZh ?? port.name, country: port.country, city: port.name, code: port.locode, aliases: [port.name, port.nameZh ?? "", port.locode, port.country, port.region].filter(Boolean) };
+  const aliases = [port.name, port.nameZh ?? "", port.locode, port.country, port.countryCode ?? "", port.region].filter((item): item is string => Boolean(item));
+  return { id: port.id, name: port.name, nameZh: port.nameZh, localName: port.nameZh ?? port.name, country: port.country, countryCode: port.countryCode, region: port.region, city: port.name, code: port.locode, locode: port.locode, type: "\u6e2f\u53e3", aliases };
 }

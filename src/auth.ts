@@ -25,9 +25,10 @@ export const authOptions: NextAuthOptions = {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
         const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-        if (!user || user.status !== "ACTIVE") return null;
+        if (!user) return null;
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!valid) return null;
+        if (user.status !== "ACTIVE") throw new Error("USER_DISABLED");
         await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
         return { id: user.id, name: user.name ?? user.email, email: user.email, role: user.role };
       },

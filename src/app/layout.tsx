@@ -1,6 +1,7 @@
 ﻿import type { Metadata } from "next";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Header } from "@/components/layout/Header";
+import { Providers } from "@/app/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,8 +17,10 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="min-h-screen bg-ocean-50 antialiased">
-        <Header />
-        <main>{children}</main>
+        <Providers>
+          <Header />
+          <main>{children}</main>
+        </Providers>
       </body>
     </html>
   );
