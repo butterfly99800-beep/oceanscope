@@ -1,4 +1,4 @@
-﻿import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page, type Response } from "playwright";
 import { mapDomRowsToCoscoSchedules, mapJsonPayloadsToCoscoSchedules } from "@/features/cosco-scraper/server/cosco-schedule-mapper";
@@ -136,14 +136,13 @@ async function chooseCity(page: Page, placeholder: RegExp, value: string, step: 
   const option = await preferred.isVisible({ timeout: 3500 }).catch(() => false) ? preferred : options.first();
   if (await option.isVisible({ timeout: 3500 }).catch(() => false)) {
     await option.click();
-  } else {
-    await input.press("Enter").catch(() => undefined);
+    await page.waitForTimeout(600);
+    return;
   }
+  await input.press("Enter").catch(() => undefined);
   await page.waitForTimeout(600);
   const selectedValue = await input.inputValue().catch(() => "");
-  if (!selectedValue && !(await page.locator(".ivu-select-selected-value").filter({ hasText: new RegExp(firstWord, "i") }).first().isVisible().catch(() => false))) {
-    fail(step, "COSCO_SELECTOR_NOT_FOUND", `COSCO city autocomplete did not confirm ${value}.`, 502);
-  }
+  if (!selectedValue) fail(step, "COSCO_SELECTOR_NOT_FOUND", `COSCO city autocomplete did not confirm ${value}.`, 502);
 }
 
 async function setDepartureDate(page: Page, dateFrom: string) {
