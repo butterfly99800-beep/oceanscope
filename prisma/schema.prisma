@@ -114,6 +114,12 @@ enum ScheduleNodeType {
   DESTINATION
 }
 
+enum ScheduleDataSource {
+  SEED
+  MANUAL
+  COSCO_LIVE_QUERY
+}
+
 model SailingSchedule {
   id                   String                @id @default(cuid())
   carrierId            String
@@ -143,6 +149,7 @@ model SailingSchedule {
   originalEtd          DateTime?
   originalEta          DateTime?
   lastUpdatedAt        DateTime              @default(now())
+  source               ScheduleDataSource    @default(SEED)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   carrier              Carrier               @relation(fields: [carrierId], references: [id], onDelete: Restrict)
@@ -160,6 +167,7 @@ model SailingSchedule {
   @@index([etd])
   @@index([eta])
   @@index([status])
+  @@index([source])
   @@index([vesselName])
   @@index([voyageNumber])
 }

@@ -160,3 +160,26 @@ npx prisma db seed
 - ????????? `/admin` ? `/api/admin/**`?
 - ?????????????????????
 - ??????????????????????
+
+## COSCO Schedule Scraper Test
+
+The admin schedule page includes a disabled-by-default COSCO sailing schedule scraper test. It is for manual admin testing only and does not run scheduled jobs.
+
+Required local setup:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+Environment variables:
+
+```env
+COSCO_SCRAPER_ENABLED="false"
+COSCO_SCRAPER_HEADLESS="true"
+COSCO_SCRAPER_TIMEOUT_MS="60000"
+```
+
+Set `COSCO_SCRAPER_ENABLED=true` only when an administrator intentionally runs the test from `/admin/schedules`. The preview API does not write to MySQL. The commit API writes only after admin confirmation and skips records that cannot be matched to existing MySQL ports/carriers or are duplicates.
+
+If COSCO shows captcha, login, 403, or 429 controls, the scraper returns a specific error and stops. It does not bypass access controls.

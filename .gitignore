@@ -8,3 +8,6 @@ dist
 !.env.example
 
 /src/generated/prisma
+
+# Local scraper debug output
+tmp/

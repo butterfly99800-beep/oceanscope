@@ -19,6 +19,15 @@ export type ApiErrorCode =
   | "CONFLICT"
   | "DELETE_BLOCKED"
   | "DATABASE_ERROR"
+  | "COSCO_SCRAPER_DISABLED"
+  | "COSCO_AUTOMATION_BLOCKED"
+  | "COSCO_CAPTCHA_REQUIRED"
+  | "COSCO_RATE_LIMITED"
+  | "COSCO_LOGIN_REQUIRED"
+  | "COSCO_SELECTOR_NOT_FOUND"
+  | "COSCO_TIMEOUT"
+  | "COSCO_NO_RESULTS"
+  | "COSCO_UNKNOWN_ERROR"
   | "UNKNOWN_ERROR";
 
 export function jsonData<T>(data: T, init?: ResponseInit) {
@@ -115,6 +124,8 @@ export const routeSchema = z.object({
 export function validationError(error: z.ZodError) {
   return jsonError("BAD_REQUEST", error.issues[0]?.message ?? "参数格式错误", 400);
 }
+
+
 
 
 

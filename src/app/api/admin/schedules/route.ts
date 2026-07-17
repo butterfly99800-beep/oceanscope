@@ -1,4 +1,4 @@
-﻿import { Prisma, ScheduleStatus } from "@prisma/client";
+﻿import { Prisma, ScheduleDataSource, ScheduleStatus } from "@prisma/client";
 import { requireAdminForApi } from "@/lib/authorization";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,7 @@ const includeSchedule = { carrier: true, route: true, originPort: true, destinat
 type ScheduleRecord = Prisma.SailingScheduleGetPayload<{ include: typeof includeSchedule }>;
 const statusLabels: Record<ScheduleStatus, string> = { NORMAL: "正常", EXPECTED_DELAY: "预计延误", DELAYED: "已延误", CUTOFF_SOON: "即将截关", CANCELLED: "已取消" };
 const statusValues: Record<string, ScheduleStatus> = { 正常: "NORMAL", 预计延误: "EXPECTED_DELAY", 已延误: "DELAYED", 即将截关: "CUTOFF_SOON", 已取消: "CANCELLED", NORMAL: "NORMAL", EXPECTED_DELAY: "EXPECTED_DELAY", DELAYED: "DELAYED", CUTOFF_SOON: "CUTOFF_SOON", CANCELLED: "CANCELLED" };
+const sourceValues = new Set<ScheduleDataSource>(["SEED", "MANUAL", "COSCO_LIVE_QUERY"]);
 
 const scheduleSchema = z.object({
   carrierId: z.string().min(1, "船公司必填"),
@@ -80,6 +81,7 @@ function toRecord(schedule: ScheduleRecord) {
     status: statusLabels[schedule.status],
     delayHours: schedule.delayHours,
     updatedAt: schedule.updatedAt.toISOString().slice(0, 10),
+    source: schedule.source,
   };
 }
 
@@ -120,6 +122,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search")?.trim();
     const status = searchParams.get("status")?.trim();
     const direct = searchParams.get("direct");
+    const source = searchParams.get("source")?.trim();
     const where: Prisma.SailingScheduleWhereInput = {
       ...(search ? { OR: [{ vesselName: { contains: search } }, { voyageNumber: { contains: search } }, { serviceName: { contains: search } }, { routeName: { contains: search } }] } : {}),
       ...(searchParams.get("carrierId") ? { carrierId: searchParams.get("carrierId") ?? undefined } : {}),
@@ -127,6 +130,7 @@ export async function GET(request: Request) {
       ...(searchParams.get("destinationPortId") ? { destinationPortId: searchParams.get("destinationPortId") ?? undefined } : {}),
       ...(status && statusValues[status] ? { status: statusValues[status] } : {}),
       ...(direct === "true" ? { direct: true } : direct === "false" ? { direct: false } : {}),
+      ...(source && sourceValues.has(source as ScheduleDataSource) ? { source: source as ScheduleDataSource } : process.env.SHOW_SEED_SCHEDULES === "false" ? { source: { not: "SEED" as const } } : {}),
       ...((searchParams.get("dateFrom") || searchParams.get("dateTo")) ? { etd: { ...(searchParams.get("dateFrom") ? { gte: new Date(searchParams.get("dateFrom") ?? "") } : {}), ...(searchParams.get("dateTo") ? { lte: new Date(searchParams.get("dateTo") ?? "") } : {}) } } : {}),
     };
     const sortBy = searchParams.get("sortBy") ?? "etd";
@@ -148,10 +152,11 @@ export async function POST(request: Request) {
     const relationError = await ensureRelations(parsed.data);
     if (relationError) return relationError;
     const data = parsed.data;
-    const schedule = await prisma.sailingSchedule.create({ data: { carrierId: data.carrierId, routeId: data.routeId || null, serviceName: data.serviceName, routeName: data.routeName, vesselName: data.vesselName, voyageNumber: data.voyageNumber, originPortId: data.originPortId, destinationPortId: data.destinationPortId, etd: data.etd, eta: data.eta, transitDays: data.transitDays, direct: data.direct, stopCount: data.transitPortIds.length, frequency: data.frequency, originTerminal: data.originTerminal, destinationTerminal: data.destinationTerminal, cyOpenTime: data.cyOpenTime, siCutOffTime: data.siCutOffTime, vgmCutOffTime: data.vgmCutOffTime, customsCutOffTime: data.customsCutOffTime, estimatedBerthingTime: data.estimatedBerthingTime, departureReliability: data.departureReliability, status: data.status, delayHours: data.delayHours, originalEtd: data.originalEtd, originalEta: data.originalEta, lastUpdatedAt: new Date() } });
+    const schedule = await prisma.sailingSchedule.create({ data: { carrierId: data.carrierId, routeId: data.routeId || null, serviceName: data.serviceName, routeName: data.routeName, vesselName: data.vesselName, voyageNumber: data.voyageNumber, originPortId: data.originPortId, destinationPortId: data.destinationPortId, etd: data.etd, eta: data.eta, transitDays: data.transitDays, direct: data.direct, stopCount: data.transitPortIds.length, frequency: data.frequency, originTerminal: data.originTerminal, destinationTerminal: data.destinationTerminal, cyOpenTime: data.cyOpenTime, siCutOffTime: data.siCutOffTime, vgmCutOffTime: data.vgmCutOffTime, customsCutOffTime: data.customsCutOffTime, estimatedBerthingTime: data.estimatedBerthingTime, departureReliability: data.departureReliability, status: data.status, delayHours: data.delayHours, originalEtd: data.originalEtd, originalEta: data.originalEta, lastUpdatedAt: new Date(), source: "MANUAL" } });
     await replaceChildren(schedule.id, parsed.data);
     const full = await prisma.sailingSchedule.findUniqueOrThrow({ where: { id: schedule.id }, include: includeSchedule });
     return jsonData(toRecord(full), { status: 201 });
   } catch (error) { return handlePrismaError(error); }
 }
+
 

@@ -81,23 +81,24 @@ const money = (value) => Number(value.toFixed(2));
 function seedPassword(envName) {
   const value = process.env[envName];
   if (value) return value;
-  const generated = randomBytes(12).toString('base64url');
-  console.warn(envName + ' is not set. Generated one-time seed password: ' + generated);
-  return generated;
+  console.warn(envName + ' is not set. Generated a one-time seed password. Set this env var before relying on demo login.');
+  return randomBytes(12).toString('base64url');
 }
 
 async function seedUsers() {
+  const adminEmail = 'admin@oceanscope.local'.trim().toLowerCase();
+  const customerEmail = 'customer@oceanscope.local'.trim().toLowerCase();
   const adminHash = await bcrypt.hash(seedPassword('SEED_ADMIN_PASSWORD'), 12);
   const customerHash = await bcrypt.hash(seedPassword('SEED_CUSTOMER_PASSWORD'), 12);
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@oceanscope.local' },
-    update: { name: 'OceanScope Admin', passwordHash: adminHash, role: 'ADMIN', status: 'ACTIVE' },
-    create: { name: 'OceanScope Admin', email: 'admin@oceanscope.local', passwordHash: adminHash, role: 'ADMIN', status: 'ACTIVE' },
+    where: { email: adminEmail },
+    update: { name: 'OceanScope Admin', email: adminEmail, passwordHash: adminHash, role: 'ADMIN', status: 'ACTIVE' },
+    create: { name: 'OceanScope Admin', email: adminEmail, passwordHash: adminHash, role: 'ADMIN', status: 'ACTIVE' },
   });
   const customer = await prisma.user.upsert({
-    where: { email: 'customer@oceanscope.local' },
-    update: { name: 'Demo Customer', passwordHash: customerHash, role: 'CUSTOMER', status: 'ACTIVE' },
-    create: { name: 'Demo Customer', email: 'customer@oceanscope.local', passwordHash: customerHash, role: 'CUSTOMER', status: 'ACTIVE' },
+    where: { email: customerEmail },
+    update: { name: 'Demo Customer', email: customerEmail, passwordHash: customerHash, role: 'CUSTOMER', status: 'ACTIVE' },
+    create: { name: 'Demo Customer', email: customerEmail, passwordHash: customerHash, role: 'CUSTOMER', status: 'ACTIVE' },
   });
   await prisma.bookingOrder.updateMany({ where: { userId: null }, data: { userId: customer.id } });
   return { admin, customer };

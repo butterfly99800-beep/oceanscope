@@ -42,6 +42,7 @@ export async function GET(request: Request) {
       ...(minReliability ? { departureReliability: { gte: Number(minReliability) } } : {}),
       ...(maxTransitDays ? { transitDays: { lte: Number(maxTransitDays) } } : {}),
       ...((dateFrom || dateTo) ? { etd: { ...(dateFrom ? { gte: new Date(dateFrom) } : {}), ...(dateTo ? { lte: new Date(dateTo) } : {}) } } : {}),
+      ...(process.env.SHOW_SEED_SCHEDULES === "false" ? { source: { not: "SEED" as const } } : {}),
     };
     const [items, total] = await Promise.all([
       prisma.sailingSchedule.findMany({ where, include: scheduleInclude, skip, take: pageSize, orderBy: orderBy(searchParams.get("sort")) }),
