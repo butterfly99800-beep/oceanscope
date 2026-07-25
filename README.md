@@ -1,6 +1,6 @@
 ﻿# OceanScope
 
-OceanScope 是一个基于 Next.js 15、App Router、TypeScript 和 Tailwind CSS 构建的国际物流前端演示平台。当前版本用于前端测试环境和产品演示，不连接数据库、真实船期 API、真实运价 API、AIS 数据或用户登录系统。
+OceanScope 是一个基于 Next.js 15、App Router、TypeScript 和 Tailwind CSS 构建的国际物流前端演示平台。
 
 ## 安装
 
