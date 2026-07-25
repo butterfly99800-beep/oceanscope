@@ -19,8 +19,7 @@ const authText = {
 function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
-  if (status === "loading") return <div className="h-9 w-28 rounded-md bg-white/10" />;
-  if (!session?.user) {
+  if (status !== "authenticated" || !session?.user) {
     return (
       <>
         <Link href="/login" onClick={onNavigate} className="rounded-md px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">{authText.login}</Link>

@@ -1,20 +1,26 @@
-﻿"use client";
+"use client";
 
 import { Anchor, MapPin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PortOption } from "@/features/schedules/types";
+import type { CoscoCitySelection, PortOption } from "@/features/schedules/types";
 
-function matches(port: PortOption, query: string) {
-  const value = query.trim().toLowerCase();
-  const haystack = [port.name, port.localName, port.country, port.city, port.code, ...port.aliases].join(" ").toLowerCase();
-  return haystack.includes(value);
-}
-
-export function PortAutocomplete({ label, value, selectedId, ports, error, onInputChange, onSelect }: { label: string; value: string; selectedId: string; ports: PortOption[]; error?: string; onInputChange: (value: string) => void; onSelect: (port: PortOption) => void }) {
+export function PortAutocomplete({ label, value, selectedId, error, onInputChange, onSelect }: { label: string; value: string; selectedId: string; ports: PortOption[]; error?: string; onInputChange: (value: string) => void; onSelect: (port: PortOption) => void }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [coscoCities, setCoscoCities] = useState<CoscoCitySelection[]>([]);
+  const [loadingCosco, setLoadingCosco] = useState(false);
   const rootRef = useRef<HTMLLabelElement | null>(null);
-  const suggestions = useMemo(() => value.trim() ? ports.filter((port) => matches(port, value)).slice(0, 8) : [], [ports, value]);
+  const coscoSuggestions = useMemo<PortOption[]>(() => coscoCities.map((city) => ({
+    id: `cosco:${city.uuid}`,
+    name: city.name,
+    localName: city.fullName,
+    country: city.country,
+    city: city.name,
+    code: city.locode || city.cityCode,
+    aliases: [city.fullName, city.locode, city.cityCode].filter(Boolean),
+    coscoCity: city,
+  })), [coscoCities]);
+  const suggestions = useMemo(() => coscoSuggestions.slice(0, 15), [coscoSuggestions]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -23,6 +29,33 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    const query = value.trim();
+    if (!open || query.length < 1) {
+      setCoscoCities([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setLoadingCosco(true);
+      fetch(`/api/cosco/cities/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then((response) => response.ok ? response.json() as Promise<{ data: CoscoCitySelection[] }> : Promise.reject())
+        .then((payload) => setCoscoCities(payload.data))
+        .catch(() => {
+          if (!controller.signal.aborted) setCoscoCities([]);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoadingCosco(false);
+        });
+    }, 220);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [open, value]);
 
   return (
     <label ref={rootRef} className="relative block">
@@ -39,13 +72,14 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
       </div>
       {error ? <p className="mt-1 text-xs font-medium text-rose-600">{error}</p> : null}
       {open && value.trim() ? (
-        <div className="absolute left-0 right-0 top-[74px] z-[1200] max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+        <div className="absolute left-0 right-0 top-[74px] z-[1200] max-h-96 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+          {loadingCosco ? <div className="px-3 py-2 text-xs font-medium text-slate-500">正在查询承运人城市候选...</div> : null}
           {suggestions.length ? suggestions.map((port, index) => (
             <button key={port.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(port); setOpen(false); }} className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left ${index === activeIndex ? "bg-ocean-50" : "hover:bg-slate-50"}`}>
-              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-ocean-700"><Anchor className="h-4 w-4" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{port.name} · {port.localName}</span><span className="block truncate text-xs text-slate-500">{port.city}, {port.country} · {port.code}</span></span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#eaf2fb] text-[#2f68a8]"><Anchor className="h-4 w-4" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{port.coscoCity?.fullName}</span><span className="block truncate text-xs text-slate-500">{port.coscoCity?.locode || port.coscoCity?.cityCode || port.coscoCity?.name}</span></span>
             </button>
-          )) : <div className="px-3 py-4 text-sm text-slate-500">未找到匹配港口</div>}
+          )) : <div className="px-3 py-4 text-sm text-slate-500">未找到匹配城市</div>}
         </div>
       ) : null}
     </label>

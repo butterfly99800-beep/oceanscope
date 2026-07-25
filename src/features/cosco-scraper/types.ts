@@ -14,8 +14,19 @@ export type CoscoScheduleCriteria = {
   destination: string;
   dateFrom: string;
   dateTo?: string;
+  originCityUuid?: string;
+  destinationCityUuid?: string;
   debug?: boolean;
   forceRefresh?: boolean;
+};
+
+export type CoscoCityOption = {
+  uuid: string;
+  name: string;
+  fullName: string;
+  locode: string;
+  cityCode: string;
+  country: string;
 };
 
 export type CoscoNetworkProbe = {
@@ -24,6 +35,7 @@ export type CoscoNetworkProbe = {
   status: number;
   resourceType: string;
   contentType: string | null;
+  postData?: string | null;
 };
 
 export type CoscoDetectedControl = {
@@ -50,6 +62,13 @@ export type CoscoSchedulePreview = {
   direct: boolean | null;
   stopCount: number | null;
   transitPorts: string[];
+  cargoNature?: string | null;
+  cutOffTime?: string | null;
+  availableTime?: string | null;
+  originFacilityName?: string | null;
+  destinationFacilityName?: string | null;
+  outboundHaulage?: string | null;
+  inboundHaulage?: string | null;
   rawText: string;
 };
 

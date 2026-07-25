@@ -1,24 +1,39 @@
 ﻿export type ScheduleStatus = "正常" | "预计延误" | "已延误" | "即将截关" | "已取消";
-export type ScheduleTag = "推荐" | "直达" | "中转" | "准班率高" | "即将截关";
-export type ScheduleSortOption = "recommended" | "earliestDeparture" | "earliestArrival" | "shortestTransit" | "highestReliability" | "fewestStops";
+export type ScheduleTag = "直达" | "中转" | "即将截关";
+export type ScheduleSortOption = "recommended" | "earliestDeparture" | "earliestArrival" | "shortestTransit" | "fewestStops";
 export type ScheduleViewMode = "cards" | "table" | "calendar";
 export type DateRangeOption = "3" | "7" | "14" | "custom";
 
+export interface CoscoCitySelection {
+  uuid: string;
+  name: string;
+  fullName: string;
+  locode: string;
+  cityCode: string;
+  country: string;
+}
+
 export interface PortOption {
   id: string;
+  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY";
   name: string;
   localName: string;
   country: string;
   city: string;
   code: string;
   aliases: string[];
+  coscoCity?: CoscoCitySelection;
 }
 
 export interface ScheduleSearchCriteria {
   originPortId: string;
   destinationPortId: string;
+  originCoscoCity?: CoscoCitySelection;
+  destinationCoscoCity?: CoscoCitySelection;
   departureDate: string;
   dateRange: DateRangeOption;
+  beforeDays: string;
+  afterDays: string;
   directOnly: boolean;
 }
 
@@ -44,6 +59,7 @@ export interface ScheduleTransitPort {
 
 export interface SailingSchedule {
   id: string;
+  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY";
   carrier: string;
   carrierCode: string;
   serviceName: string;
@@ -66,6 +82,7 @@ export interface SailingSchedule {
   terminal: string;
   destinationTerminal: string;
   cutOffTime: string;
+  availableTime?: string;
   siCutOffTime: string;
   vgmCutOffTime: string;
   cyOpenTime: string;
@@ -86,7 +103,6 @@ export interface ScheduleFilterState {
   statuses: ScheduleStatus[];
   departureFrom: string;
   transitDays: "all" | "0-15" | "16-25" | "26-35" | "35+";
-  reliability: "all" | "90+" | "80-90" | "70-80" | "under70";
   serviceName: string;
   vesselName: string;
   terminal: string;
@@ -105,3 +121,6 @@ export interface FavoriteSchedule {
   scheduleId: string;
   createdAt: string;
 }
+
+
+

@@ -21,7 +21,7 @@ page.on('response', (response) => {
   const request = response.request();
   const type = request.resourceType();
   if (type === 'xhr' || type === 'fetch') {
-    const item = { url: response.url(), method: request.method(), status: response.status(), resourceType: type, contentType: response.headers()['content-type'] ?? '' };
+      const item = { url: response.url(), method: request.method(), status: response.status(), resourceType: type, contentType: response.headers()['content-type'] ?? '', postData: request.postData() };
     if (isScheduleUrl(item.url) || /schedule|sailing/i.test(item.url)) {
       network.push(item);
       if ((item.contentType || '').includes('json')) {

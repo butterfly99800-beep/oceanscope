@@ -103,6 +103,13 @@ export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: str
     const originText = asString(item.pol) || origin;
     const destinationText = asString(item.pod) || destination;
     const transitDays = asNumber(item.transitTime);
+    const cargoNature = asString(item.cargoNature) || null;
+    const cutOffTime = parseCoscoDate(asString(item.cutOff));
+    const availableTime = parseCoscoDate(asString(item.available));
+    const originFacilityName = asString(item.outboundFacilityName) || null;
+    const destinationFacilityName = asString(item.inboundFacilityName) || null;
+    const outboundHaulage = asString(item.outboundHaulage) || null;
+    const inboundHaulage = asString(item.inboundHaulage) || null;
     const key = [vesselName, serviceName, voyageNumber, originText, destinationText, etd].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
@@ -130,7 +137,14 @@ export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: str
       direct: transitPorts.length === 0,
       stopCount: transitPorts.length,
       transitPorts,
-      rawText: JSON.stringify({ vesselName, serviceName, voyageNumber, originText, destinationText, etd, eta, transitDays }),
+      cargoNature,
+      cutOffTime,
+      availableTime,
+      originFacilityName,
+      destinationFacilityName,
+      outboundHaulage,
+      inboundHaulage,
+      rawText: JSON.stringify({ vesselName, serviceName, voyageNumber, originText, destinationText, etd, eta, transitDays, cargoNature, cutOffTime, availableTime, originFacilityName, destinationFacilityName, outboundHaulage, inboundHaulage }),
     });
   }
 
@@ -170,6 +184,13 @@ export function mapDomRowsToCoscoSchedules(rows: string[], origin: string, desti
         direct,
         stopCount: direct === true ? 0 : direct === false ? null : null,
         transitPorts: [],
+        cargoNature: null,
+        cutOffTime: null,
+        availableTime: null,
+        originFacilityName: null,
+        destinationFacilityName: null,
+        outboundHaulage: null,
+        inboundHaulage: null,
         rawText: row,
       } satisfies CoscoSchedulePreview;
     })

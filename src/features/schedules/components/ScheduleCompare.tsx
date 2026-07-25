@@ -19,10 +19,9 @@ export function ScheduleCompareDrawer({ open, schedules, onClose }: { open: bool
     { label: "航程天数", value: (s) => `${s.transitDays} 天` },
     { label: "中转次数", value: (s) => `${s.stopCount} 次` },
     { label: "中转港", value: (s) => s.transitPorts.map((p) => p.portCode).join(" / ") || "直达" },
-    { label: "截关时间", value: (s) => s.cutOffTime.slice(0, 16).replace("T", " ") },
-    { label: "准班率", value: (s) => `${s.departureReliability}%` },
-    { label: "船期状态", value: (s) => s.scheduleStatus },
+    { label: "截载时间", value: (s) => s.cutOffTime.slice(0, 16).replace("T", " ") },
+    { label: "货物类型", value: (s) => s.frequency || "-" },
     { label: "备注", value: (s) => s.terminalRemark },
   ];
-  return <div className="fixed inset-0 z-[2200] bg-ink/40 backdrop-blur-sm"><aside className="ml-auto h-full w-full max-w-5xl overflow-y-auto bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold text-ink">船期对比</h2><p className="mt-1 text-sm text-slate-500">最多对比 3 条模拟船期，不包含价格信息。</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button></div><div className="mt-6 overflow-x-auto"><table className="min-w-[760px] w-full border-separate border-spacing-0 text-sm"><tbody>{rows.map((row) => <tr key={row.label}><th className="sticky left-0 w-36 border-b border-slate-100 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">{row.label}</th>{schedules.map((schedule) => <td key={schedule.id} className="border-b border-slate-100 px-4 py-3 text-slate-700">{row.value(schedule)}</td>)}</tr>)}</tbody></table></div></aside></div>;
+  return <div className="fixed inset-0 z-[2200] bg-ink/40 backdrop-blur-sm"><aside className="ml-auto h-full w-full max-w-5xl overflow-y-auto bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold text-ink">船期对比</h2><p className="mt-1 text-sm text-slate-500">最多对比 3 条船期，不包含价格信息。</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button></div><div className="mt-6 overflow-x-auto"><table className="min-w-[760px] w-full border-separate border-spacing-0 text-sm"><tbody>{rows.map((row) => <tr key={row.label}><th className="sticky left-0 w-36 border-b border-slate-100 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">{row.label}</th>{schedules.map((schedule) => <td key={schedule.id} className="border-b border-slate-100 px-4 py-3 text-slate-700">{row.value(schedule)}</td>)}</tr>)}</tbody></table></div></aside></div>;
 }

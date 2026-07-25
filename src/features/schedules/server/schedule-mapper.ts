@@ -1,4 +1,4 @@
-﻿import type { Prisma, ScheduleStatus } from "@prisma/client";
+import type { Prisma, ScheduleStatus } from "@prisma/client";
 import type { SailingSchedule, ScheduleStatus as UiScheduleStatus, ScheduleTag } from "@/features/schedules/types";
 
 export const scheduleInclude = {
@@ -34,16 +34,39 @@ function timePart(value: Date | null | undefined) {
 
 function tagsFor(schedule: ScheduleWithRelations): ScheduleTag[] {
   const tags: ScheduleTag[] = [];
-  if (schedule.departureReliability >= 92) tags.push("推荐");
   tags.push(schedule.direct ? "直达" : "中转");
-  if (schedule.departureReliability >= 90) tags.push("准班率高");
   if (schedule.status === "CUTOFF_SOON") tags.push("即将截关");
   return tags;
+}
+
+function displayValue(value: string | null | undefined, source: ScheduleWithRelations["source"]) {
+  const text = value?.trim() ?? "";
+  if (source !== "COSCO_LIVE_QUERY") return text;
+  if (/^COSCO\s+(online schedule|live query)$/i.test(text)) return "";
+  return text;
+}
+
+function displayTerminal(value: string | null | undefined, portName: string, source: ScheduleWithRelations["source"]) {
+  const text = displayValue(value, source);
+  if (source !== "COSCO_LIVE_QUERY") return text;
+  if (!text) return "";
+  const lowerText = text.toLowerCase();
+  const lowerPort = portName.toLowerCase();
+  if (lowerText === lowerPort) return "";
+  if (lowerText.startsWith(`${lowerPort},`)) return "";
+  return text;
+}
+
+function displayCoscoTime(value: Date | null | undefined, fallbackValue: Date, source: ScheduleWithRelations["source"]) {
+  if (!value) return "";
+  if (source === "COSCO_LIVE_QUERY" && value.getTime() === fallbackValue.getTime()) return "";
+  return iso(value);
 }
 
 export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
   return {
     id: schedule.id,
+    source: schedule.source,
     carrier: schedule.carrier.name,
     carrierCode: schedule.carrier.code,
     serviceName: schedule.serviceName,
@@ -71,13 +94,14 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
     transitDays: schedule.transitDays,
     direct: schedule.direct,
     stopCount: schedule.stopCount,
-    frequency: schedule.frequency,
-    terminal: schedule.originTerminal,
-    destinationTerminal: schedule.destinationTerminal,
-    cutOffTime: iso(schedule.customsCutOffTime),
-    siCutOffTime: iso(schedule.siCutOffTime),
-    vgmCutOffTime: iso(schedule.vgmCutOffTime),
-    cyOpenTime: iso(schedule.cyOpenTime),
+    frequency: displayValue(schedule.frequency, schedule.source),
+    terminal: displayTerminal(schedule.originTerminal, schedule.originPort.name, schedule.source),
+    destinationTerminal: displayTerminal(schedule.destinationTerminal, schedule.destinationPort.name, schedule.source),
+    cutOffTime: displayCoscoTime(schedule.customsCutOffTime, schedule.etd, schedule.source),
+    availableTime: displayCoscoTime(schedule.estimatedBerthingTime, schedule.etd, schedule.source),
+    siCutOffTime: displayCoscoTime(schedule.siCutOffTime, schedule.etd, schedule.source),
+    vgmCutOffTime: displayCoscoTime(schedule.vgmCutOffTime, schedule.etd, schedule.source),
+    cyOpenTime: displayCoscoTime(schedule.cyOpenTime, schedule.etd, schedule.source),
     estimatedBerthingTime: iso(schedule.estimatedBerthingTime),
     departureReliability: schedule.departureReliability,
     scheduleStatus: statusLabels[schedule.status],
@@ -92,7 +116,7 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
       type: node.nodeType === "ORIGIN" ? "origin" : node.nodeType === "DESTINATION" ? "destination" : "transit",
     })),
     tags: tagsFor(schedule),
-    terminalRemark: schedule.status === "CANCELLED" ? "该航次已取消，建议选择相邻班期。" : schedule.delayHours ? `当前延误 ${schedule.delayHours} 小时，请关注后续更新。` : "数据库船期，关键节点以模拟数据展示。",
+    terminalRemark: schedule.source === "COSCO_LIVE_QUERY" ? "以承运人页面返回字段为准。" : schedule.status === "CANCELLED" ? "该航次已取消，建议选择相邻班期。" : schedule.delayHours ? `当前延误 ${schedule.delayHours} 小时，请关注后续更新。` : "关键节点以承运人公布信息为准。",
   };
 }
 

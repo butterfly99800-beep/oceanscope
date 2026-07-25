@@ -1,17 +1,47 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type BrowserContext, type Page, type Response } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright";
 import { mapDomRowsToCoscoSchedules, mapJsonPayloadsToCoscoSchedules } from "@/features/cosco-scraper/server/cosco-schedule-mapper";
 import type { CoscoDetectedControl, CoscoNetworkProbe, CoscoScheduleCriteria, CoscoScrapeResult, CoscoScraperErrorCode } from "@/features/cosco-scraper/types";
 
 const homeUrl = "https://elines.coscoshipping.com/ebusiness/";
+const scheduleUrl = "https://elines.coscoshipping.com/ebusiness/sailingSchedule";
 
-type Step = "open homepage" | "locate schedule entry" | "open schedule page" | "select origin" | "select destination" | "set date" | "submit search" | "wait for results" | "parse results";
+type Step = "open schedule page" | "select origin" | "select destination" | "set date" | "submit search" | "wait for results" | "parse results";
 
 export class CoscoScraperError extends Error {
   constructor(public readonly code: CoscoScraperErrorCode, message: string, public readonly status = 400, public readonly step?: string) {
     super(message);
   }
+}
+
+// ========== 优化1：浏览器全局复用，不每次启动 ==========
+let sharedBrowser: Browser | null = null;
+let sharedBrowserPromise: Promise<Browser> | null = null;
+
+async function getBrowser(): Promise<Browser> {
+  if (sharedBrowser) return sharedBrowser;
+  if (sharedBrowserPromise) return sharedBrowserPromise;
+
+  sharedBrowserPromise = (async () => {
+    const headless = isHeadless();
+    const browser = await chromium.launch({
+      headless,
+      slowMo: headless ? 0 : 200,
+      timeout: timeoutMs(),
+    });
+    sharedBrowser = browser;
+    sharedBrowserPromise = null;
+
+    // 浏览器崩溃时自动清理
+    browser.on("disconnected", () => {
+      sharedBrowser = null;
+    });
+
+    return browser;
+  })();
+
+  return sharedBrowserPromise;
 }
 
 function timeoutMs() {
@@ -33,9 +63,10 @@ function fail(step: Step, code: CoscoScraperErrorCode, message: string, status =
 }
 
 function networkProbe(response: Response): CoscoNetworkProbe {
-  return { url: response.url(), method: response.request().method(), status: response.status(), resourceType: response.request().resourceType(), contentType: response.headers()["content-type"] ?? null };
+  return { url: response.url(), method: response.request().method(), status: response.status(), resourceType: response.request().resourceType(), contentType: response.headers()["content-type"] ?? null, postData: response.request().postData() };
 }
 
+// ========== 反爬检测：完全保留，遇到封禁直接停，不硬刚 ==========
 async function detectBlocked(page: Page, network: CoscoNetworkProbe[], step: Step) {
   if (network.some((item) => item.status === 429)) fail(step, "COSCO_RATE_LIMITED", "COSCO returned 429 rate limit.", 429);
   if (network.some((item) => item.status === 403)) fail(step, "COSCO_AUTOMATION_BLOCKED", "COSCO returned 403 access restriction.", 403);
@@ -59,95 +90,85 @@ async function detectControls(page: Page): Promise<CoscoDetectedControl[]> {
 
 async function dismissPublicModals(page: Page) {
   const names = [/^OK$/i, /Allow All/i, /Reject All/i, /^Confirm$/i, /^Accept$/i];
-  for (let round = 0; round < 4; round += 1) {
+  for (let round = 0; round < 3; round += 1) {
     let clicked = false;
     for (const name of names) {
       const roleButton = page.getByRole("button", { name }).first();
-      if (await roleButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await roleButton.click({ timeout: 3000 }).catch(() => undefined);
+      if (await roleButton.isVisible({ timeout: 800 }).catch(() => false)) {
+        await roleButton.click({ timeout: 2000 }).catch(() => undefined);
         clicked = true;
-        await page.waitForTimeout(600).catch(() => undefined);
         continue;
       }
       const textButton = page.locator("button, .ivu-btn, [role=button]").filter({ hasText: name }).first();
-      if (await textButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await textButton.click({ timeout: 3000 }).catch(() => undefined);
+      if (await textButton.isVisible({ timeout: 800 }).catch(() => false)) {
+        await textButton.click({ timeout: 2000 }).catch(() => undefined);
         clicked = true;
-        await page.waitForTimeout(600).catch(() => undefined);
       }
     }
     if (!clicked) break;
   }
 }
 
-async function findScheduleEntry(page: Page) {
-  const candidates = [
-    page.getByRole("link", { name: /Sailing Schedules?/i }).first(),
-    page.getByText(/Sailing Schedules?/i).first(),
-    page.getByRole("link", { name: /^Schedule$/i }).first(),
-    page.getByText(/^Schedule$/i).first(),
-    page.getByText(/Find Schedule by City Pairs/i).first(),
-    page.getByText(/Search by City/i).first(),
-    page.getByText(/船期|船期查询/).first(),
-  ];
-  for (const locator of candidates) {
-    if (await locator.isVisible({ timeout: 1500 }).catch(() => false)) return locator;
-  }
-  return null;
-}
-
-async function openScheduleFromHome(context: BrowserContext, page: Page, network: CoscoNetworkProbe[]) {
-  log("open homepage");
+// ========== 优化2：从首页导航到船期页（更稳定，避免直接跳转缺 session） ==========
+async function openSchedulePage(page: Page, network: CoscoNetworkProbe[]) {
+  log("open home page");
   await page.goto(homeUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs() });
-  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+  await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
   await dismissPublicModals(page);
-  await detectBlocked(page, network, "open homepage");
+  await detectBlocked(page, network, "open schedule page");
 
-  log("locate schedule entry");
-  const entry = await findScheduleEntry(page);
-  if (!entry) fail("locate schedule entry", "COSCO_SELECTOR_NOT_FOUND", "Sailing Schedule entry was not found on COSCO homepage.", 502);
-  const entryText = (await entry.innerText().catch(() => "Sailing Schedule")).replace(/\s+/g, " ").trim();
-  const popupPromise = page.waitForEvent("popup", { timeout: 5000 }).catch(() => null);
-  await entry.click({ timeout: 10000 });
-  const popup = await popupPromise;
-  const schedulePage = popup ?? page;
-  if (popup) await popup.waitForLoadState("domcontentloaded", { timeout: timeoutMs() }).catch(() => undefined);
-  await schedulePage.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
-  await dismissPublicModals(schedulePage);
+  log("navigate to sailing schedule");
+  // 点击导航进入船期页，建立完整 session
+  const scheduleLink = page.getByRole("link", { name: /sailing schedule/i }).first();
+  if (await scheduleLink.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => undefined),
+      scheduleLink.click(),
+    ]);
+  } else {
+    // fallback：直接跳转
+    await page.goto(scheduleUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs() });
+  }
+  await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
+  await dismissPublicModals(page);
+  await detectBlocked(page, network, "open schedule page");
 
-  log("open schedule page");
-  const originInput = schedulePage.getByPlaceholder(/^Origin City/i).first();
-  if (!(await originInput.isVisible({ timeout: 12000 }).catch(() => false))) fail("open schedule page", "COSCO_SELECTOR_NOT_FOUND", "Origin City input was not found after opening COSCO schedule entry.", 502);
-  return { page: schedulePage, entryText, openedNewPage: Boolean(popup), frames: context.pages().flatMap((item) => item.frames().map((frame) => frame.url()).filter(Boolean)) };
+  const originInput = page.getByPlaceholder(/^Origin City/i).first();
+  if (!(await originInput.isVisible({ timeout: 10000 }).catch(() => false))) {
+    fail("open schedule page", "COSCO_SELECTOR_NOT_FOUND", "Origin City input was not found on COSCO schedule page.", 502);
+  }
 }
 
 async function chooseCity(page: Page, placeholder: RegExp, value: string, step: Step) {
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.mouse.click(20, 20).catch(() => undefined);
   const input = page.getByPlaceholder(placeholder).first();
-  if (!(await input.isVisible({ timeout: 10000 }).catch(() => false))) fail(step, "COSCO_SELECTOR_NOT_FOUND", `${placeholder} input was not found.`, 502);
-  await input.click();
-  await input.fill("");
+  if (!(await input.isVisible({ timeout: 8000 }).catch(() => false))) fail(step, "COSCO_SELECTOR_NOT_FOUND", `${placeholder} input was not found.`, 502);
+  await input.click({ force: true, timeout: 5000 });
+  await input.fill("", { timeout: 5000 });
+  // 等待城市搜索接口返回，事件驱动而非硬等待
   const waitCity = page.waitForResponse((response) => /findCityDistrictByPrefix/i.test(response.url()), { timeout: 10000 }).catch(() => null);
-  await input.type(value, { delay: isHeadless() ? 20 : 120 });
+  await input.type(value, { delay: isHeadless() ? 15 : 100 });
   await waitCity;
-  await page.waitForTimeout(900);
+
   const firstWord = value.split(/[,(\s]/)[0] || value;
   const options = page.locator(".ivu-select-dropdown:not([style*='display: none']) .ivu-select-item, .ivu-select-item").filter({ hasText: new RegExp(firstWord, "i") });
   const preferred = options.filter({ hasText: /China|United States|Shanghai|Los Angeles|CNSHA|USLAX/i }).first();
-  const option = await preferred.isVisible({ timeout: 3500 }).catch(() => false) ? preferred : options.first();
-  if (await option.isVisible({ timeout: 3500 }).catch(() => false)) {
-    await option.click();
-    await page.waitForTimeout(600);
+  const option = await preferred.isVisible({ timeout: 3000 }).catch(() => false) ? preferred : options.first();
+  if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await option.click({ force: true, timeout: 5000 });
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await page.waitForTimeout(150).catch(() => undefined);
     return;
   }
   await input.press("Enter").catch(() => undefined);
-  await page.waitForTimeout(600);
   const selectedValue = await input.inputValue().catch(() => "");
   if (!selectedValue) fail(step, "COSCO_SELECTOR_NOT_FOUND", `COSCO city autocomplete did not confirm ${value}.`, 502);
 }
 
 async function setDepartureDate(page: Page, dateFrom: string) {
   const dateInput = page.getByPlaceholder(/Earliest Departure Date/i).first();
-  if (!(await dateInput.isVisible({ timeout: 5000 }).catch(() => false))) return;
+  if (!(await dateInput.isVisible({ timeout: 4000 }).catch(() => false))) return;
   await dateInput.click();
   const plainInput = await dateInput.evaluate((node) => node instanceof HTMLInputElement && !node.readOnly).catch(() => false);
   if (plainInput) {
@@ -168,14 +189,84 @@ async function extractRows(page: Page) {
   }).catch(() => [] as string[]);
 }
 
+async function clickScheduleSearchButton(page: Page) {
+  const selectors = [
+    ".sailing-search-by-city-form button.search-btn",
+    ".sailing-search-by-city-form button",
+    "button.search-btn",
+  ];
+  for (const selector of selectors) {
+    const button = page.locator(selector).filter({ hasText: /^Search$/i }).first();
+    if (await button.isVisible({ timeout: 1200 }).catch(() => false)) {
+      await button.click({ force: true });
+      return true;
+    }
+  }
+
+  const clicked = await page.evaluate(() => {
+    const isVisible = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+    const candidates = Array.from(document.querySelectorAll("button, [role='button'], .ivu-btn"))
+      .filter((element) => /^Search$/i.test((element.textContent ?? "").replace(/\s+/g, " ").trim()))
+      .filter(isVisible)
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter((item) => item.rect.top > 120)
+      .sort((a, b) => a.rect.top - b.rect.top);
+    const target = candidates[0]?.element as HTMLElement | undefined;
+    target?.click();
+    return Boolean(target);
+  }).catch(() => false);
+
+  return clicked;
+}
+
+// ========== 优化3：更激进的资源拦截 ==========
+function setupRouteBlocking(context: BrowserContext) {
+  // 只拦图片、字体、媒体和第三方统计脚本，不拦 CSS（避免影响页面渲染）
+  const blockedTypes = new Set(["image", "font", "media"]);
+  const blockedPatterns = [
+    /googleanalytics/i,
+    /googletagmanager/i,
+    /hotjar/i,
+    /baidu.*tongji/i,
+    /umami/i,
+    /clarity/i,
+    /gtag/i,
+  ];
+
+  context.route("**/*", async (route) => {
+    const type = route.request().resourceType();
+    if (blockedTypes.has(type)) {
+      await route.abort().catch(() => undefined);
+      return;
+    }
+    const url = route.request().url();
+    if (blockedPatterns.some((p) => p.test(url))) {
+      await route.abort().catch(() => undefined);
+      return;
+    }
+    await route.continue().catch(() => undefined);
+  });
+}
+
 export async function scrapeCoscoSchedules(criteria: CoscoScheduleCriteria): Promise<CoscoScrapeResult> {
   const started = Date.now();
   const network: CoscoNetworkProbe[] = [];
   const jsonEndpoints = new Set<string>();
   const jsonPayloads: unknown[] = [];
   const headless = isHeadless();
-  const browser = await chromium.launch({ headless, slowMo: headless ? 0 : 300, timeout: timeoutMs() });
-  const context = await browser.newContext({ locale: "en-US", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 OceanScopeCoscoLive/1.0" });
+
+  // 复用全局浏览器，只新建 context + page
+  const browser = await getBrowser();
+  const context = await browser.newContext({
+    locale: "en-US",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 OceanScopeCoscoLive/1.0",
+  });
+  setupRouteBlocking(context);
+
   const page = await context.newPage();
   page.setDefaultTimeout(timeoutMs());
   page.on("response", async (response) => {
@@ -191,31 +282,37 @@ export async function scrapeCoscoSchedules(criteria: CoscoScheduleCriteria): Pro
   });
 
   try {
-    const opened = await openScheduleFromHome(context, page, network);
-    const schedulePage = opened.page;
-    const controlsBefore = await detectControls(schedulePage);
-    await detectBlocked(schedulePage, network, "open schedule page");
+    await openSchedulePage(page, network);
+    const controlsBefore = await detectControls(page);
 
     log("select origin");
-    await chooseCity(schedulePage, /^Origin City/i, criteria.origin, "select origin");
+    await chooseCity(page, /^Origin City/i, criteria.origin, "select origin");
     log("select destination");
-    await chooseCity(schedulePage, /^Destination City/i, criteria.destination, "select destination");
+    await chooseCity(page, /^Destination City/i, criteria.destination, "select destination");
     log("set date");
-    await setDepartureDate(schedulePage, criteria.dateFrom);
+    await setDepartureDate(page, criteria.dateFrom);
 
     log("submit search");
     const beforeNetworkLength = network.length;
-    const searchButton = schedulePage.locator(".sailing-search-by-city-form button.search-btn, button.search-btn").first();
-    if (!(await searchButton.isVisible({ timeout: 5000 }).catch(() => false))) fail("submit search", "COSCO_SELECTOR_NOT_FOUND", "Search button was not found.", 502);
-    await searchButton.click({ force: true });
+    const scheduleResponsePromise = page.waitForResponse(
+      (response) => /purpoShipmentWs/i.test(response.url()),
+      { timeout: Math.min(timeoutMs(), 30000) }
+    ).catch(() => null);
+    if (!(await clickScheduleSearchButton(page))) fail("submit search", "COSCO_SELECTOR_NOT_FOUND", "Search button was not found.", 502);
 
     log("wait for results");
-    await schedulePage.waitForLoadState("networkidle", { timeout: timeoutMs() }).catch(() => undefined);
-    await schedulePage.waitForTimeout(3500);
-    await detectBlocked(schedulePage, network, "wait for results");
+    const scheduleResponse = await scheduleResponsePromise;
+    if (scheduleResponse) {
+      const payload = await scheduleResponse.json().catch(() => null);
+      if (payload) jsonPayloads.push(payload);
+    } else {
+      // 没有直接抓到船期接口的话，等网络空闲，去掉1200ms硬等待
+      await page.waitForLoadState("networkidle", { timeout: Math.min(timeoutMs(), 10000) }).catch(() => undefined);
+    }
+    await detectBlocked(page, network, "wait for results");
 
     log("parse results");
-    const rows = await extractRows(schedulePage);
+    const rows = await extractRows(page);
     const jsonSchedules = mapJsonPayloadsToCoscoSchedules(jsonPayloads, criteria.origin, criteria.destination);
     const schedules = jsonSchedules.length ? jsonSchedules : mapDomRowsToCoscoSchedules(rows, criteria.origin, criteria.destination);
     const warnings: string[] = [];
@@ -228,20 +325,20 @@ export async function scrapeCoscoSchedules(criteria: CoscoScheduleCriteria): Pro
       await mkdir(debugDir, { recursive: true });
       const stamp = Date.now();
       screenshotPath = path.join(debugDir, `live-preview-${stamp}.png`);
-      await schedulePage.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
-      await writeFile(path.join(debugDir, `live-preview-${stamp}.html`), await schedulePage.content(), "utf8").catch(() => undefined);
+      await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+      await writeFile(path.join(debugDir, `live-preview-${stamp}.html`), await page.content(), "utf8").catch(() => undefined);
       await writeFile(path.join(debugDir, `live-preview-${stamp}.txt`), rows.join("\n---\n"), "utf8").catch(() => undefined);
       await writeFile(path.join(debugDir, `live-preview-${stamp}.json`), JSON.stringify(jsonPayloads, null, 2), "utf8").catch(() => undefined);
     }
 
     return {
       source: "COSCO_LIVE",
-      targetUrl: homeUrl,
-      finalUrl: schedulePage.url(),
-      pageTitle: await schedulePage.title().catch(() => ""),
-      entryText: opened.entryText,
-      openedNewPage: opened.openedNewPage,
-      iframeUrls: opened.frames.filter((url) => url !== homeUrl),
+      targetUrl: scheduleUrl,
+      finalUrl: page.url(),
+      pageTitle: await page.title().catch(() => ""),
+      entryText: "Sailing Schedule",
+      openedNewPage: false,
+      iframeUrls: page.frames().map((f) => f.url()).filter((u) => u && u !== scheduleUrl),
       queriedAt: new Date().toISOString(),
       criteria,
       schedules,
@@ -251,17 +348,13 @@ export async function scrapeCoscoSchedules(criteria: CoscoScheduleCriteria): Pro
       fromCache: false,
     };
   } catch (error) {
-    if (!headless) await page.waitForTimeout(7000).catch(() => undefined);
+    if (!headless) await page.waitForTimeout(5000).catch(() => undefined);
     if (error instanceof CoscoScraperError) throw error;
     const message = error instanceof Error ? error.message : "Unknown COSCO scraper error";
     if (/timeout/i.test(message)) throw new CoscoScraperError("COSCO_TIMEOUT", message, 504);
     throw new CoscoScraperError("COSCO_UNKNOWN_ERROR", message, 500);
   } finally {
+    // 只关闭 context，不关闭 browser（browser 全局复用）
     await context.close().catch(() => undefined);
-    await browser.close().catch(() => undefined);
   }
 }
-
-
-
-
