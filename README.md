@@ -1,185 +1,259 @@
-﻿# OceanScope
+# OceanScope
 
-OceanScope 是一个基于 Next.js 15、App Router、TypeScript 和 Tailwind CSS 构建的国际物流前端演示平台。
+OceanScope 是一个基于 Next.js 15 构建的国际物流 SaaS 平台，提供船期查询、运费对比、订单管理和航运地图可视化等功能。采用 Prisma + MySQL 作为数据层，集成 COSCO 中远海运实时船期数据抓取。
 
-## 安装
+## 技术栈
+
+| 类别 | 技术 |
+|------|------|
+| 框架 | Next.js 15 (App Router) + React 19 |
+| 语言 | TypeScript |
+| 样式 | Tailwind CSS |
+| 数据库 | MySQL 8.x + Prisma ORM 6.x |
+| 认证 | NextAuth v4 (Credentials + bcryptjs) |
+| 爬虫 | Playwright (COSCO 船期抓取) |
+| 地图 | MapLibre GL JS |
+| 校验 | Zod |
+| 图标 | Lucide React |
+
+## 核心功能
+
+### 前台功能
+
+- **`/` 首页**：平台入口，功能导航
+- **`/atlas` 航运地图**：基于 MapLibre 的全球港口、航线可视化
+- **`/schedules` 船期查询**：按起运港/目的港/日期查询船期，支持筛选、排序、对比
+- **`/rates` 运费查询**：多承运商运价对比，费用明细拆解，附加服务选择
+- **`/orders` 订单管理**：订舱订单列表与详情查看
+- **`/account` 个人中心**：账户信息与密码管理
+
+### 后台管理 (`/admin`)
+
+- **港口管理** `/admin/ports`：港口基础数据维护
+- **船公司管理** `/admin/carriers`：承运商信息管理
+- **航线管理** `/admin/routes`：航线与中转港配置
+- **船期管理** `/admin/schedules`：船期数据管理 + COSCO 抓取测试
+- **运价管理** `/admin/rates`：运费报价与费用项管理
+- **订单管理** `/admin/orders`：订舱订单全量管理
+- **用户管理** `/admin/users`：用户角色、状态、权限管理
+
+## 项目结构
+
+```
+oceanscope/
+├── src/
+│   ├── app/                    # Next.js App Router 页面与 API
+│   │   ├── api/                # 所有 API 路由
+│   │   │   ├── admin/          # 管理员 API（需鉴权）
+│   │   │   ├── auth/           # NextAuth 认证接口
+│   │   │   ├── schedules/      # 船期查询接口
+│   │   │   ├── rates/          # 运价查询接口
+│   │   │   ├── orders/         # 订单接口
+│   │   │   ├── ports/          # 港口搜索接口
+│   │   │   └── cosco/          # COSCO 城市搜索接口
+│   │   └── [page]/             # 前端页面
+│   ├── features/               # 业务功能模块
+│   │   ├── admin/              # 后台管理组件与工具
+│   │   ├── atlas/              # 航运地图模块
+│   │   ├── auth/               # 认证表单
+│   │   ├── cosco-scraper/      # COSCO 船期爬虫
+│   │   ├── orders/             # 订单模块
+│   │   ├── rates/              # 运价模块
+│   │   └── schedules/          # 船期模块
+│   ├── components/             # 通用 UI 组件
+│   ├── lib/                    # 公共库（prisma、auth、授权等）
+│   └── types/                  # 全局类型定义
+├── prisma/
+│   ├── schema.prisma           # 数据模型定义
+│   ├── seed.mjs                # 种子数据脚本
+│   └── migrations/             # 数据库迁移文件
+├── scripts/                    # 调试脚本
+├── .env.example                # 环境变量模板
+└── package.json
+```
+
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
 npm install
 ```
 
-## 开发启动
+### 2. 配置环境变量
+
+复制 `.env.example` 为 `.env` 并填写配置：
+
+```bash
+cp .env.example .env
+```
+
+### 3. 初始化数据库
+
+```bash
+# 生成 Prisma Client
+npm run db:generate
+
+# 执行数据库迁移
+npm run db:migrate
+
+# 导入种子数据
+npm run db:seed
+```
+
+### 4. 安装 Playwright 浏览器（可选，COSCO 浏览器模式需要）
+
+```bash
+npx playwright install chromium
+```
+
+### 5. 启动开发服务
 
 ```bash
 npm run dev
 ```
 
-默认访问地址：
+访问：http://localhost:3000
 
-```text
-http://localhost:3000
+## 环境变量说明
+
+### 数据库
+
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `DATABASE_URL` | MySQL 连接串 | `mysql://root:password@127.0.0.1:3306/oceanscope` |
+
+### 认证
+
+| 变量 | 说明 |
+|------|------|
+| `NEXTAUTH_SECRET` | JWT 加密密钥（`openssl rand -base64 32` 生成） |
+| `NEXTAUTH_URL` | 应用根 URL，开发环境为 `http://localhost:3000` |
+| `SEED_ADMIN_PASSWORD` | 种子管理员账号密码 |
+| `SEED_CUSTOMER_PASSWORD` | 种子客户账号密码 |
+
+### COSCO 船期爬虫
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `COSCO_SCRAPER_ENABLED` | `false` | 是否启用 COSCO 抓取功能 |
+| `COSCO_SCRAPER_HEADLESS` | `true` | 浏览器模式是否无头 |
+| `COSCO_SCHEDULE_CACHE_MINUTES` | `360` | 船期缓存时长（分钟） |
+| `COSCO_SCHEDULE_FETCH_COOLDOWN_SECONDS` | `120` | 相同查询抓取冷却时间（秒） |
+| `COSCO_FRONTEND_SCRAPER_MODE` | `api` | 前端抓取模式：`api` / `auto` / `browser` |
+| `COSCO_FRONTEND_BROWSER_FALLBACK` | `false` | API 模式失败时是否自动降级到浏览器 |
+| `SHOW_SEED_SCHEDULES` | `false` | 是否展示种子船期数据 |
+
+## 种子账号
+
+执行 `npm run db:seed` 后自动创建：
+
+| 角色 | 邮箱 | 密码 |
+|------|------|------|
+| 管理员 | `admin@oceanscope.local` | `SEED_ADMIN_PASSWORD` 环境变量值 |
+| 普通用户 | `customer@oceanscope.local` | `SEED_CUSTOMER_PASSWORD` 环境变量值 |
+
+## COSCO 船期抓取
+
+### 双模式架构
+
+```
+请求 → API 模式（直接调 COSCO 接口，~3秒）
+         ↓ 失败/无结果
+      浏览器模式（Playwright 模拟，~45秒，兜底）
+         ↓
+      内存缓存（默认6小时）
 ```
 
-## 生产构建
+- **API 模式**：直接调用 COSCO 官方 JSON 接口，速度快，优先使用
+- **浏览器模式**：Playwright 模拟真实浏览器操作，稳定性高，作为兜底
+- **自动降级**：`auto` 模式下 API 失败自动切换浏览器模式
 
-```bash
-npm run build
-```
+### 管理端测试
 
-## 生产启动
+管理员可在 `/admin/schedules` 页面使用 COSCO 抓取测试工具，支持 Preview（预览不入库）和 Commit（确认后入库）两种模式。
 
-```bash
-npm run start
-```
+## 主要 API 接口
 
-Next.js 默认生产端口为 `3000`，可通过部署平台或运行环境覆盖端口配置。
+### 公开接口
 
-## 当前页面
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/ports/search` | 港口搜索 |
+| GET | `/api/cosco/cities/search` | COSCO 城市搜索 |
+| GET | `/api/schedules/search` | 船期查询 |
+| POST | `/api/rates/search` | 运价查询 |
+| POST | `/api/auth/register` | 用户注册 |
 
-- `/`：首页
-- `/atlas`：Atlas 航运地图，使用 MapLibre GL JS 公开 HTTPS 地图样式和本地模拟船舶、港口、航线数据
-- `/schedules`：船期查询，使用本地模拟船期数据
-- `/rates`：运费探索器，使用本地模拟报价数据
-- `/orders`：模拟订单列表，订单保存在浏览器 localStorage
-- `/orders/[id]`：模拟订单详情
+### 需要登录
 
-## 模拟数据说明
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/account` | 账户信息 |
+| PUT | `/api/account/profile` | 更新资料 |
+| PUT | `/api/account/password` | 修改密码 |
+| GET | `/api/orders` | 我的订单列表 |
+| GET | `/api/orders/[id]` | 订单详情 |
+| POST | `/api/bookings` | 创建订舱 |
 
-当前仍使用模拟数据的功能包括：
+### 管理员接口
 
-- 船舶位置、航行状态、港口和航线
-- 船期查询、船名航次、ETD / ETA、关键节点
-- 运费查询、承运商报价、费用明细和附加服务
-- 模拟预订和订单保存
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| CRUD | `/api/admin/ports` | 港口管理 |
+| CRUD | `/api/admin/carriers` | 船公司管理 |
+| CRUD | `/api/admin/routes` | 航线管理 |
+| CRUD | `/api/admin/schedules` | 船期管理 |
+| CRUD | `/api/admin/rates` | 运价管理 |
+| CRUD | `/api/admin/orders` | 订单管理 |
+| CRUD | `/api/admin/users` | 用户管理 |
+| POST | `/api/admin/integrations/cosco/schedules/preview` | COSCO 抓取预览 |
+| POST | `/api/admin/integrations/cosco/schedules/commit` | COSCO 抓取入库 |
 
-这些数据仅用于前端演示，不构成真实船期、真实报价或订舱承诺。
+## 数据库模型
 
-## 环境变量
+核心数据表：
 
-当前前端演示版不需要必填环境变量。请参考 `.env.example`。不要提交 `.env.local` 或任何包含敏感信息的环境变量文件。
+- **Port** - 港口（LOCODE 唯一标识）
+- **Carrier** - 船公司
+- **Route** - 航线（含中转港）
+- **SailingSchedule** - 船期（ETD/ETA、可靠性、状态等）
+- **RateQuote** - 运价报价（含多箱型、费用明细）
+- **RateLineItem** - 运价费用项
+- **User** - 用户（ADMIN / CUSTOMER 角色）
+- **BookingOrder** - 订舱订单
+- **BookingContainer** - 订单箱型明细
+- **BookingTimeline** - 订单状态时间线
 
-## 部署建议
-
-推荐部署到支持 Next.js 的前端平台，例如 Vercel、Netlify 或自托管 Node.js 环境。
-
-通用流程：
+## 生产部署
 
 ```bash
 npm install
 npm run build
 npm run start
 ```
+
+推荐部署环境：
+- Vercel（Serverless 模式）
+- 自托管 Node.js 服务器
+- Docker 容器部署
+
+## 开发命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 启动开发服务器 |
+| `npm run build` | 生产构建 |
+| `npm run start` | 启动生产服务 |
+| `npm run lint` | ESLint 代码检查 |
+| `npm run db:generate` | 生成 Prisma Client |
+| `npm run db:migrate` | 执行数据库迁移 |
+| `npm run db:seed` | 导入种子数据 |
+| `npm run db:studio` | 打开 Prisma Studio 数据库可视化 |
 
 ## 注意事项
 
-- 不要提交 `node_modules`、`.next`、`.env.local`、日志和临时缓存文件。
-- MapLibre 只在客户端动态加载，避免 SSR 阶段访问浏览器 API。
-- localStorage 相关逻辑仅在客户端访问，并带有安全回退。
-
-## MySQL 与 Prisma
-
-后台管理中的港口管理、船公司管理、航线管理已预留 MySQL + Prisma ORM 接入。本阶段不把数据库账号或密码写入源码。
-
-### 环境变量
-
-复制 `.env.example` 为 `.env`，并填写真实 MySQL 连接地址：
-
-```env
-DATABASE_URL="mysql://USER:PASSWORD@127.0.0.1:3306/oceanscope"
-```
-
-可以连接本地 MySQL，也可以连接云 MySQL。请不要提交 `.env`、`.env.local` 或任何包含真实密码的文件。
-
-### Prisma 命令
-
-```bash
-npm run db:generate
-npm run db:migrate -- --name init_core_data
-npm run db:seed
-npm run db:studio
-```
-
-也可以直接使用：
-
-```bash
-npx prisma validate
-npx prisma generate
-npx prisma migrate dev --name init_core_data
-npx prisma db seed
-```
-
-### 当前数据库化模块
-
-- `/admin/ports`：港口管理，读取 `/api/admin/ports`
-- `/admin/carriers`：船公司管理，读取 `/api/admin/carriers`
-- `/admin/routes`：航线管理，读取 `/api/admin/routes`
-
-其他模块仍保留本地模拟数据，后续再逐步接入数据库。
-
-
-
-## ???????
-
-OceanScope ???? NextAuth Credentials ??? MySQL ????????? bcrypt ???????????
-
-### ??????
-
-?? `.env.example` ? `.env`??????
-
-```env
-DATABASE_URL="mysql://USER:PASSWORD@127.0.0.1:3306/oceanscope"
-NEXTAUTH_SECRET="replace-with-a-long-random-secret"
-NEXTAUTH_URL="http://localhost:3000"
-SEED_ADMIN_PASSWORD="change-me-before-production"
-SEED_CUSTOMER_PASSWORD="change-me-before-production"
-```
-
-?????????????
-
-```bash
-openssl rand -base64 32
-```
-
-### ????
-
-Seed ????
-
-- ????`admin@oceanscope.local`
-- ?????`customer@oceanscope.local`
-
-???? `SEED_ADMIN_PASSWORD` ? `SEED_CUSTOMER_PASSWORD`????????seed ??????????????????????????????????????
-
-```bash
-npx prisma db seed
-```
-
-### ????
-
-- ?????????????????
-- ????????????????
-- ????????? `/admin` ? `/api/admin/**`?
-- ?????????????????????
-- ??????????????????????
-
-## COSCO Schedule Scraper Test
-
-The admin schedule page includes a disabled-by-default COSCO sailing schedule scraper test. It is for manual admin testing only and does not run scheduled jobs.
-
-Required local setup:
-
-```bash
-npm install
-npx playwright install chromium
-```
-
-Environment variables:
-
-```env
-COSCO_SCRAPER_ENABLED="false"
-COSCO_SCRAPER_HEADLESS="true"
-COSCO_SCRAPER_TIMEOUT_MS="60000"
-```
-
-Set `COSCO_SCRAPER_ENABLED=true` only when an administrator intentionally runs the test from `/admin/schedules`. The preview API does not write to MySQL. The commit API writes only after admin confirmation and skips records that cannot be matched to existing MySQL ports/carriers or are duplicates.
-
-If COSCO shows captcha, login, 403, or 429 controls, the scraper returns a specific error and stops. It does not bypass access controls.
+- COSCO 船期抓取仅供测试使用，请遵守目标网站的使用条款和 robots 协议
+- 生产环境请务必修改默认种子密码和 NEXTAUTH_SECRET
+- MapLibre 地图仅在客户端加载，避免 SSR 阶段访问浏览器 API
+- 不要提交 `.env`、`node_modules`、`.next` 等包含敏感信息或构建产物的文件
