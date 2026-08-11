@@ -101,7 +101,7 @@ export function AdminDatabaseResourcePage({ resource }: { resource: ResourceKind
   const [portOptions, setPortOptions] = useState<Option[]>([]);
   const [routeOptions, setRouteOptions] = useState<Option[]>([]);
   const config = useMemo(() => buildConfig(resource, carrierOptions, portOptions, routeOptions), [carrierOptions, portOptions, resource, routeOptions]);
-  const categories = useMemo(() => resource === "schedules" ? ["SEED", "MANUAL", "COSCO_LIVE_QUERY"] : Array.from(new Set(records.map((item) => text(config.categoryKey ? item[config.categoryKey] : undefined)).filter(Boolean))), [config.categoryKey, records, resource]);
+  const categories = useMemo(() => resource === "schedules" ? ["SEED", "MANUAL", "COSCO_LIVE_QUERY", "OOCL_LIVE_QUERY"] : Array.from(new Set(records.map((item) => text(config.categoryKey ? item[config.categoryKey] : undefined)).filter(Boolean))), [config.categoryKey, records, resource]);
 
   const loadOptions = useCallback(async () => {
     if (!["routes", "schedules", "rates"].includes(resource)) return;
@@ -188,5 +188,6 @@ function DbFormDrawer({ config, mode, record, onClose, onSave }: { config: Resou
 function ConfirmDialog({ title, message, onCancel, onConfirm }: { title: string; message: string; onCancel: () => void; onConfirm: () => void }) {
   return <div className="fixed inset-0 z-[2300] flex items-center justify-center bg-ink/45 p-4"><div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"><h3 className="text-lg font-semibold text-ink">{title}</h3><p className="mt-2 text-sm text-slate-600">{message}</p><div className="mt-5 flex justify-end gap-2"><button onClick={onCancel} className="admin-secondary">Cancel</button><button onClick={onConfirm} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Delete</button></div></div></div>;
 }
+
 
 

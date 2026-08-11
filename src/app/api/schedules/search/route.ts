@@ -1,13 +1,15 @@
-﻿import { Prisma, ScheduleStatus, type Port } from "@prisma/client";
+import { Prisma, ScheduleStatus, type Port } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonList, parsePagination } from "@/features/admin/server/api-utils";
 import { acquireCoscoScraperLock, releaseCoscoScraperLock } from "@/features/cosco-scraper/server/cosco-scraper-lock";
 import { saveCoscoSchedules } from "@/features/cosco-scraper/server/save-cosco-schedules";
 import { mapSchedule, scheduleInclude } from "@/features/schedules/server/schedule-mapper";
 import { COSCOProvider } from "@/features/shipping/providers/cosco/provider";
+import { OOCLProvider } from "@/features/shipping/providers/oocl/provider";
 
 const statusMap: Record<string, ScheduleStatus> = { "正常": "NORMAL", NORMAL: "NORMAL", "预计延误": "EXPECTED_DELAY", EXPECTED_DELAY: "EXPECTED_DELAY", "已延误": "DELAYED", DELAYED: "DELAYED", "即将截关": "CUTOFF_SOON", CUTOFF_SOON: "CUTOFF_SOON", "已取消": "CANCELLED", CANCELLED: "CANCELLED" };
 const coscoAttemptedAt = new Map<string, number>();
+const liveSources = ["COSCO_LIVE_QUERY", "OOCL_LIVE_QUERY"] as const;
 
 function cacheMinutes() {
   const value = Number(process.env.COSCO_SCHEDULE_CACHE_MINUTES ?? "360");
@@ -84,24 +86,36 @@ async function tryFetchAndSave(originPort: Port, destinationPort: Port, searchPa
   if (Date.now() - lastSuccess < fetchCooldownMs()) return false;
   if (!acquireCoscoScraperLock()) return false;
   try {
-    const result = await COSCOProvider.searchSchedule({
-      originPort,
-      destinationPort,
-      departureDate: dateFrom.slice(0, 10),
-      dateTo: dateTo || undefined,
-      mode: frontendScraperMode(),
-      originOverride: searchParams.get("originCity") || undefined,
-      destinationOverride: searchParams.get("destinationCity") || undefined,
-      originCityUuid: searchParams.get("originCityUuid") || undefined,
-      destinationCityUuid: searchParams.get("destinationCityUuid") || undefined,
-      forceRefresh: true,
-    });
-    // 只有成功抓到数据才标记冷却时间
-    if (result.schedules.length > 0) {
-      coscoAttemptedAt.set(key, Date.now());
+    let fetchedAny = false;
+    for (const provider of [COSCOProvider, OOCLProvider]) {
+      try {
+        const result = await provider.searchSchedule({
+          originPort,
+          destinationPort,
+          departureDate: dateFrom.slice(0, 10),
+          dateTo: dateTo || undefined,
+          mode: provider.code === "COSCO" ? frontendScraperMode() : undefined,
+          originOverride: provider.code === "COSCO" ? searchParams.get("originCity") || undefined : undefined,
+          destinationOverride: provider.code === "COSCO" ? searchParams.get("destinationCity") || undefined : undefined,
+          originCityUuid: provider.code === "COSCO" ? searchParams.get("originCityUuid") || undefined : undefined,
+          destinationCityUuid: provider.code === "COSCO" ? searchParams.get("destinationCityUuid") || undefined : undefined,
+          forceRefresh: provider.code === "COSCO" ? true : undefined,
+        });
+        if (!result.schedules.length) continue;
+        fetchedAny = true;
+        await saveCoscoSchedules(result.schedules, {
+          mode: "updateDuplicates",
+          originPort,
+          destinationPort,
+          source: provider.code === "OOCL" ? "OOCL_LIVE_QUERY" : "COSCO_LIVE_QUERY",
+          carrierCode: provider.code,
+          carrierName: provider.code === "OOCL" ? "OOCL" : "COSCO SHIPPING",
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") console.error(error);
+      }
     }
-    if (!result.schedules.length) return true;
-    await saveCoscoSchedules(result.schedules, { mode: "updateDuplicates", originPort, destinationPort });
+    if (fetchedAny) coscoAttemptedAt.set(key, Date.now());
     return true;
   } finally {
     releaseCoscoScraperLock();
@@ -115,9 +129,9 @@ export async function GET(request: Request) {
     const where = baseWhere(searchParams, originPort?.id, destinationPort?.id);
 
     if (originPort && destinationPort && searchParams.get("dateFrom")) {
-      const freshWhere: Prisma.SailingScheduleWhereInput = { ...where, source: "COSCO_LIVE_QUERY", updatedAt: { gte: cacheCutoff() } };
+      const freshWhere: Prisma.SailingScheduleWhereInput = { ...where, source: { in: [...liveSources] }, updatedAt: { gte: cacheCutoff() } };
       if (await prisma.sailingSchedule.count({ where: freshWhere })) return list(freshWhere, searchParams);
-      const staleWhere: Prisma.SailingScheduleWhereInput = { ...where, source: "COSCO_LIVE_QUERY" };
+      const staleWhere: Prisma.SailingScheduleWhereInput = { ...where, source: { in: [...liveSources] } };
 
       try {
         const fetched = await tryFetchAndSave(originPort, destinationPort, searchParams);

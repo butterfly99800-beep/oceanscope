@@ -4,7 +4,9 @@ import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 
 export type SaveCoscoResult = { created: number; updated: number; skipped: number; skippedItems: Array<{ id: string; reason: string }> };
 
-type SaveOptions = { mode?: "skipDuplicates" | "updateDuplicates"; originPort?: Port; destinationPort?: Port };
+type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY";
+
+type SaveOptions = { mode?: "skipDuplicates" | "updateDuplicates"; originPort?: Port; destinationPort?: Port; source?: LiveScheduleSource; carrierCode?: string; carrierName?: string };
 
 function parseIso(value: string | null | undefined) {
   if (!value) return null;
@@ -25,10 +27,12 @@ async function findPort(tx: Prisma.TransactionClient, locode: string | null, tex
   return tx.port.findFirst({ where: { OR: [...(locode ? [{ locode: locode.toUpperCase() }] : []), ...textWhere(text)] } });
 }
 
-async function findCarrier(tx: Prisma.TransactionClient) {
-  const existing = await tx.carrier.findFirst({ where: { OR: [{ code: "COSCO" }, { name: { contains: "COSCO" } }, { nameZh: { contains: "中远" } }] } });
+async function findCarrier(tx: Prisma.TransactionClient, options: SaveOptions) {
+  const code = options.carrierCode || "COSCO";
+  const name = options.carrierName || "COSCO SHIPPING";
+  const existing = await tx.carrier.findFirst({ where: { OR: [{ code }, { name: { contains: name } }] } });
   if (existing) return existing;
-  return tx.carrier.create({ data: { name: "COSCO SHIPPING", nameZh: "中远海运", code: "COSCO", country: "China", status: "ACTIVE" } });
+  return tx.carrier.create({ data: { name, code, country: code === "OOCL" ? "Hong Kong, China" : "China", status: "ACTIVE" } });
 }
 
 async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId: string, item: CoscoSchedulePreview, originPortId: string, destinationPortId: string, etd: Date, eta: Date) {
@@ -38,7 +42,7 @@ async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId:
   await tx.scheduleRouteNode.create({ data: { scheduleId, portId: destinationPortId, sequence: item.transitPorts.length + 2, nodeType: "DESTINATION", arrivalTime: eta, terminal: item.destinationFacilityName || undefined } });
 }
 
-function createScheduleData(item: CoscoSchedulePreview, carrierId: string, originPortId: string, destinationPortId: string, etd: Date, eta: Date): Prisma.SailingScheduleUncheckedCreateInput {
+function createScheduleData(item: CoscoSchedulePreview, carrierId: string, originPortId: string, destinationPortId: string, etd: Date, eta: Date, source: LiveScheduleSource): Prisma.SailingScheduleUncheckedCreateInput {
   const transitDays = item.transitDays ?? fallbackTransitDays(etd, eta);
   const cutOff = parseIso(item.cutOffTime) ?? etd;
   const available = parseIso(item.availableTime) ?? etd;
@@ -72,13 +76,14 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     status: "NORMAL",
     delayHours: 0,
     lastUpdatedAt: new Date(),
-    source: "COSCO_LIVE_QUERY",
+    source,
   };
 }
 
 export async function saveCoscoSchedules(schedules: CoscoSchedulePreview[], options: SaveOptions = {}): Promise<SaveCoscoResult> {
   return prisma.$transaction(async (tx) => {
-    const carrier = await findCarrier(tx);
+    const source = options.source || "COSCO_LIVE_QUERY";
+    const carrier = await findCarrier(tx, options);
     const result: SaveCoscoResult = { created: 0, updated: 0, skipped: 0, skippedItems: [] };
     for (const item of schedules) {
       const etd = parseIso(item.etd);
@@ -95,8 +100,8 @@ export async function saveCoscoSchedules(schedules: CoscoSchedulePreview[], opti
         result.skippedItems.push({ id: item.id, reason: "Origin or destination port could not be matched in MySQL." });
         continue;
       }
-      const data = createScheduleData(item, carrier.id, originPort.id, destinationPort.id, etd, eta);
-      const existing = await tx.sailingSchedule.findFirst({ where: { carrierId: carrier.id, vesselName: data.vesselName, voyageNumber: data.voyageNumber, originPortId: originPort.id, destinationPortId: destinationPort.id, etd, source: "COSCO_LIVE_QUERY" } });
+      const data = createScheduleData(item, carrier.id, originPort.id, destinationPort.id, etd, eta, source);
+      const existing = await tx.sailingSchedule.findFirst({ where: { carrierId: carrier.id, vesselName: data.vesselName, voyageNumber: data.voyageNumber, originPortId: originPort.id, destinationPortId: destinationPort.id, etd, source } });
       if (existing && options.mode === "skipDuplicates") {
         result.skipped += 1;
         result.skippedItems.push({ id: item.id, reason: "Duplicate schedule skipped." });

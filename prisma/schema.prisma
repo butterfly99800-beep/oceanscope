@@ -137,6 +137,7 @@ enum ScheduleDataSource {
   SEED
   MANUAL
   COSCO_LIVE_QUERY
+  OOCL_LIVE_QUERY
 }
 
 model SailingSchedule {
@@ -477,3 +478,5 @@ model BookingTimeline {
   @@index([status])
   @@index([actorUserId])
 }
+
+
