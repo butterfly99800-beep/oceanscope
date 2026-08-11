@@ -1,4 +1,4 @@
-import { request, type APIRequestContext, type APIResponse } from "playwright";
+﻿import { request, type APIRequestContext, type APIResponse } from "playwright";
 import type { CoscoCityOption, CoscoNetworkProbe, CoscoScheduleCriteria, CoscoScrapeResult } from "@/features/cosco-scraper/types";
 import { mapJsonPayloadsToCoscoSchedules } from "@/features/cosco-scraper/server/cosco-schedule-mapper";
 
@@ -155,14 +155,15 @@ function scoreCity(city: CitySearchResult, query: string) {
 }
 
 async function searchCity(context: APIRequestContext, query: string, network: CoscoNetworkProbe[]) {
+  const prefix = query.split(",")[0]?.trim() || query;
   const response = await context.get(CITY_SEARCH_API, {
-    params: { prefix: query, timestamp: String(Date.now()) },
+    params: { prefix, timestamp: String(Date.now()) },
     timeout: 15000,
   });
   recordNetwork(network, response, "GET");
   if (!response.ok()) throw new Error(`COSCO city search failed: ${response.status()}`);
   const data = await response.json().catch(() => null);
-  const results = extractCityResults(data).filter((item) => cityName(item));
+  const results = extractCityResults(data).filter((item) => cityUuid(item) && cityName(item));
   const [best] = results.sort((a, b) => scoreCity(b, query) - scoreCity(a, query));
   if (!best) throw new Error(`COSCO city was not found: ${query}`);
   return best;
@@ -294,3 +295,4 @@ export async function scrapeCoscoSchedulesApi(criteria: CoscoScheduleCriteria): 
     await context.dispose().catch(() => undefined);
   }
 }
+

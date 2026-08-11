@@ -17,7 +17,22 @@ const ports = [
   ["Rotterdam", "\u9e7f\u7279\u4e39", "NLRTM", "Netherlands", "NL", "Europe", 51.9244, 4.4777],
   ["Hamburg", "\u6c49\u5821", "DEHAM", "Germany", "DE", "Europe", 53.5511, 9.9937],
   ["Busan", "\u91dc\u5c71", "KRPUS", "South Korea", "KR", "East Asia", 35.1796, 129.0756],
-].map(([name, nameZh, locode, country, countryCode, region, latitude, longitude]) => ({ name: String(name), nameZh: String(nameZh), locode: String(locode), country: String(country), countryCode: String(countryCode), region: String(region), latitude: Number(latitude), longitude: Number(longitude) }));
+].map(([name, nameZh, locode, country, countryCode, region, latitude, longitude]) => {
+  const standardName = String(name);
+  const zh = String(nameZh);
+  const code = String(locode);
+  return {
+    name: standardName,
+    nameZh: zh,
+    locode: code,
+    country: String(country),
+    countryCode: String(countryCode),
+    region: String(region),
+    aliases: [standardName, standardName.toUpperCase(), zh, code, `${standardName} Port`],
+    latitude: Number(latitude),
+    longitude: Number(longitude),
+  };
+});
 
 const carriers = [
   ["OceanLink", "OceanLink CN", "OLK", "Singapore"],
@@ -28,7 +43,19 @@ const carriers = [
   ["NorthStar Lines", "NorthStar CN", "NSL", "Canada"],
   ["Atlas Blue", "Atlas Blue CN", "ABL", "Singapore"],
   ["HarborOne", "HarborOne CN", "HBO", "South Korea"],
+  ["COSCO SHIPPING", "中远海运", "COSCO", "China"],
+  ["OOCL", "东方海外", "OOCL", "Hong Kong"],
+  ["CMA CGM", "达飞轮船", "CMA", "France"],
 ].map(([name, nameZh, code, country]) => ({ name: String(name), nameZh: String(nameZh), code: String(code), country: String(country) }));
+
+const carrierPortMappings = [
+  ["COSCO", "CNSHA", "上海,中国"],
+  ["OOCL", "CNSHA", "Shanghai, China"],
+  ["CMA", "CNSHA", "SHANGHAI (CNSHA)·CHINA"],
+  ["COSCO", "USLAX", "洛杉矶,美国"],
+  ["OOCL", "USLAX", "Los Angeles, United States"],
+  ["CMA", "USLAX", "LOS ANGELES (USLAX)·UNITED STATES"],
+];
 
 const routes = [
   ["Yantian to Long Beach", "ZEX Express", "OLK", "CNYTN", "USLGB", true, 13, []],
@@ -118,6 +145,18 @@ async function seedCore() {
       const port = await prisma.port.findUniqueOrThrow({ where: { locode: String(locode) } });
       await prisma.routeTransitPort.create({ data: { routeId: route.id, portId: port.id, sequence: index + 1 } });
     }
+  }
+}
+
+async function seedCarrierPortMappings() {
+  for (const [carrierCode, locode, mappingValue] of carrierPortMappings) {
+    const carrier = await prisma.carrier.findUniqueOrThrow({ where: { code: String(carrierCode) } });
+    const port = await prisma.port.findUniqueOrThrow({ where: { locode: String(locode) } });
+    await prisma.carrierPortMapping.upsert({
+      where: { carrierId_portId: { carrierId: carrier.id, portId: port.id } },
+      update: { mappingValue: String(mappingValue) },
+      create: { carrierId: carrier.id, portId: port.id, mappingValue: String(mappingValue) },
+    });
   }
 }
 
@@ -220,6 +259,7 @@ async function seedBookingOrders(customerUserId) {
 async function main() {
   const users = await seedUsers();
   await seedCore();
+  await seedCarrierPortMappings();
   await seedSchedules();
   await seedRateQuotes();
   await seedBookingOrders(users.customer.id);

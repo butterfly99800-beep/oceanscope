@@ -1,10 +1,10 @@
 ﻿import { Prisma, ScheduleStatus, type Port } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonList, parsePagination } from "@/features/admin/server/api-utils";
-import { fetchCoscoSchedules } from "@/features/cosco-scraper/server/cosco-scraper-fetcher";
 import { acquireCoscoScraperLock, releaseCoscoScraperLock } from "@/features/cosco-scraper/server/cosco-scraper-lock";
 import { saveCoscoSchedules } from "@/features/cosco-scraper/server/save-cosco-schedules";
 import { mapSchedule, scheduleInclude } from "@/features/schedules/server/schedule-mapper";
+import { COSCOProvider } from "@/features/shipping/providers/cosco/provider";
 
 const statusMap: Record<string, ScheduleStatus> = { "正常": "NORMAL", NORMAL: "NORMAL", "预计延误": "EXPECTED_DELAY", EXPECTED_DELAY: "EXPECTED_DELAY", "已延误": "DELAYED", DELAYED: "DELAYED", "即将截关": "CUTOFF_SOON", CUTOFF_SOON: "CUTOFF_SOON", "已取消": "CANCELLED", CANCELLED: "CANCELLED" };
 const coscoAttemptedAt = new Map<string, number>();
@@ -57,10 +57,6 @@ function baseWhere(searchParams: URLSearchParams, originPortId?: string, destina
   };
 }
 
-function coscoCity(port: Port) {
-  return port.name || port.nameZh || port.locode;
-}
-
 function frontendScraperMode() {
   const mode = process.env.COSCO_FRONTEND_SCRAPER_MODE;
   const browserFallbackEnabled = process.env.COSCO_FRONTEND_BROWSER_FALLBACK === "true";
@@ -88,15 +84,18 @@ async function tryFetchAndSave(originPort: Port, destinationPort: Port, searchPa
   if (Date.now() - lastSuccess < fetchCooldownMs()) return false;
   if (!acquireCoscoScraperLock()) return false;
   try {
-    const result = await fetchCoscoSchedules({
-      origin: searchParams.get("originCity") || coscoCity(originPort),
-      destination: searchParams.get("destinationCity") || coscoCity(destinationPort),
+    const result = await COSCOProvider.searchSchedule({
+      originPort,
+      destinationPort,
+      departureDate: dateFrom.slice(0, 10),
+      dateTo: dateTo || undefined,
+      mode: frontendScraperMode(),
+      originOverride: searchParams.get("originCity") || undefined,
+      destinationOverride: searchParams.get("destinationCity") || undefined,
       originCityUuid: searchParams.get("originCityUuid") || undefined,
       destinationCityUuid: searchParams.get("destinationCityUuid") || undefined,
-      dateFrom: dateFrom.slice(0, 10),
-      dateTo: dateTo || undefined,
       forceRefresh: true,
-    }, frontendScraperMode());
+    });
     // 只有成功抓到数据才标记冷却时间
     if (result.schedules.length > 0) {
       coscoAttemptedAt.set(key, Date.now());

@@ -20,6 +20,7 @@ model Port {
   country            String
   countryCode        String?
   region             String
+  aliases            Json?
   latitude           Float?
   longitude          Float?
   status             RecordStatus       @default(ACTIVE)
@@ -36,6 +37,7 @@ model Port {
   destinationRateQuotes RateQuote[]       @relation("RateDestinationPort")
   originBookingOrders   BookingOrder[]     @relation("BookingOriginPort")
   destinationBookingOrders BookingOrder[]   @relation("BookingDestinationPort")
+  carrierPortMappings CarrierPortMapping[]
 
   @@index([country])
   @@index([region])
@@ -55,9 +57,26 @@ model Carrier {
   schedules SailingSchedule[]
   rateQuotes RateQuote[]
   bookingOrders BookingOrder[]
+  portMappings CarrierPortMapping[]
 
   @@index([country])
   @@index([status])
+}
+
+model CarrierPortMapping {
+  id           String   @id @default(cuid())
+  carrierId    String
+  portId       String
+  mappingValue String   @db.VarChar(180)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  carrier      Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  port         Port     @relation(fields: [portId], references: [id], onDelete: Cascade)
+
+  @@unique([carrierId, portId])
+  @@index([carrierId])
+  @@index([portId])
+  @@index([mappingValue])
 }
 
 model Route {
