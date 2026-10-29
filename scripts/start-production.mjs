@@ -1,0 +1,18 @@
+import 'dotenv/config';
+import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+process.env.NODE_ENV = 'production';
+const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
+if (!secret || secret.length < 32 || /replace-with|change-me/i.test(secret)) throw new Error('A private random NEXTAUTH_SECRET of at least 32 characters is required.');
+if (process.env.AUTH_SECRET && process.env.NEXTAUTH_SECRET && process.env.AUTH_SECRET !== process.env.NEXTAUTH_SECRET) throw new Error('AUTH_SECRET and NEXTAUTH_SECRET must agree.');
+const authUrl = new URL(process.env.NEXTAUTH_URL || process.env.AUTH_URL || 'invalid');
+if (authUrl.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(authUrl.hostname)) throw new Error('Public authentication URL must use HTTPS.');
+const db = new URL(process.env.DATABASE_URL || 'invalid');
+if (db.protocol !== 'mysql:' || !db.pathname.slice(1)) throw new Error('A dedicated MySQL DATABASE_URL is required.');
+const port = Number(process.env.PORT || 3040);
+if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('PORT must be an unused port between 1024 and 65535.');
+const require = createRequire(import.meta.url);
+const child = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', String(port)], { env: process.env, stdio: 'inherit' });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
+child.on('error', () => { console.error('Production server failed to start.'); process.exitCode = 1; });
+child.on('exit', code => { process.exitCode = code ?? 1; });

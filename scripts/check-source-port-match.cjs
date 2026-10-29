@@ -1,0 +1,15 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const ts = require('typescript');
+const out = {};
+new Function('exports', ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/features/ports/server/source-port-match.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(out);
+const shekou = { name: 'Shekou Pt', locode: 'CNSHK', nameZh: null };
+assert(out.matchesSourcePort('Shekou', shekou));
+assert(!out.matchesSourcePort('Hong Kong', shekou));
+assert(!out.matchesSourcePort('Shenzhen', shekou));
+assert(out.matchesSourcePort('Yantian', { name: 'Yantian Pt', locode: 'CNYTN', nameZh: null }));
+assert(out.samePortCode('CNNBO', 'CNNGB'));
+assert(out.samePortCode('CNQIN', 'CNTAO'));
+assert(!out.samePortCode('USLAX', 'USLGB'), 'Long Beach must retain its own identity');
+console.log('PASS: explicit Shekou/Yantian aliases, reject neighbouring cities, retain Long Beach identity');

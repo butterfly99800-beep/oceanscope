@@ -1,3 +1,4 @@
+if (process.env.NODE_ENV === 'production' || process.env.OCEANSCOPE_ALLOW_DEMO_SEED !== 'true') throw new Error('Demo seed disabled unless explicitly enabled in development.');
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
@@ -6,11 +7,11 @@ const prisma = new PrismaClient();
 
 const ports = [
   ["Shanghai", "\u4e0a\u6d77", "CNSHA", "China", "CN", "East Asia", 31.2304, 121.4737],
-  ["Ningbo", "\u5b81\u6ce2", "CNNGB", "China", "CN", "East Asia", 29.8746, 121.5503],
+  ["Ningbo", "\u5b81\u6ce2", "CNNBO", "China", "CN", "East Asia", 29.8746, 121.5503],
   ["Yantian", "\u76d0\u7530", "CNYTN", "China", "CN", "East Asia", 22.58, 114.27],
   ["Shekou", "\u86c7\u53e3", "CNSHK", "China", "CN", "East Asia", 22.484, 113.913],
-  ["Qingdao", "\u9752\u5c9b", "CNTAO", "China", "CN", "East Asia", 36.0671, 120.3826],
-  ["Xiamen", "\u53a6\u95e8", "CNXMN", "China", "CN", "East Asia", 24.4798, 118.0894],
+  ["Qingdao", "\u9752\u5c9b", "CNQIN", "China", "CN", "East Asia", 36.0671, 120.3826],
+  ["Xiamen", "\u53a6\u95e8", "CNXAM", "China", "CN", "East Asia", 24.4798, 118.0894],
   ["Singapore", "\u65b0\u52a0\u5761", "SGSIN", "Singapore", "SG", "Southeast Asia", 1.3521, 103.8198],
   ["Los Angeles", "\u6d1b\u6749\u77f6", "USLAX", "United States", "US", "North America West Coast", 34.0522, -118.2437],
   ["Long Beach", "\u957f\u6ee9", "USLGB", "United States", "US", "North America West Coast", 33.7701, -118.1937],
@@ -51,7 +52,7 @@ const carriers = [
 const carrierPortMappings = [
   ["COSCO", "CNSHA", "上海,中国"],
   ["OOCL", "CNSHA", "Shanghai, China"],
-  ["CMA", "CNSHA", "SHANGHAI (CNSHA)·CHINA"],
+  ["CMA", "CNSHA", "SHANGHAI ; CN ; CNSHA"],
   ["COSCO", "USLAX", "洛杉矶,美国"],
   ["OOCL", "USLAX", "Los Angeles, United States"],
   ["CMA", "USLAX", "LOS ANGELES (USLAX)·UNITED STATES"],
@@ -60,33 +61,33 @@ const carrierPortMappings = [
 const routes = [
   ["Yantian to Long Beach", "ZEX Express", "OLK", "CNYTN", "USLGB", true, 13, []],
   ["Shanghai to Los Angeles", "Pacific Arrow", "PST", "CNSHA", "USLAX", true, 14, []],
-  ["Ningbo to Rotterdam", "Eurasia Loop", "BWS", "CNNGB", "NLRTM", false, 31, ["SGSIN"]],
+  ["Ningbo to Rotterdam", "Eurasia Loop", "BWS", "CNNBO", "NLRTM", false, 31, ["SGSIN"]],
   ["Shanghai to Hamburg", "North Europe Bridge", "GHN", "CNSHA", "DEHAM", false, 32, ["KRPUS"]],
-  ["Qingdao to Los Angeles", "North China West Coast", "SBD", "CNTAO", "USLAX", false, 17, ["KRPUS"]],
-  ["Qingdao to Hamburg", "North Europe Link", "GHN", "CNTAO", "DEHAM", false, 34, ["KRPUS", "SGSIN"]],
+  ["Qingdao to Los Angeles", "North China West Coast", "SBD", "CNQIN", "USLAX", false, 17, ["KRPUS"]],
+  ["Qingdao to Hamburg", "North Europe Link", "GHN", "CNQIN", "DEHAM", false, 34, ["KRPUS", "SGSIN"]],
   ["Shanghai to Singapore", "Asia Shuttle", "SBD", "CNSHA", "SGSIN", true, 7, []],
   ["Singapore to Rotterdam", "Ocean Bridge", "BWS", "SGSIN", "NLRTM", true, 22, []],
-  ["Xiamen to Los Angeles", "Pacific Vista", "NSL", "CNXMN", "USLAX", false, 18, ["KRPUS"]],
+  ["Xiamen to Los Angeles", "Pacific Vista", "NSL", "CNXAM", "USLAX", false, 18, ["KRPUS"]],
   ["Shekou to Long Beach", "Pearl River Express", "ABL", "CNSHK", "USLGB", true, 15, []],
-  ["Ningbo to Hamburg", "Rhine Connect", "GHN", "CNNGB", "DEHAM", false, 32, ["SGSIN"]],
+  ["Ningbo to Hamburg", "Rhine Connect", "GHN", "CNNBO", "DEHAM", false, 32, ["SGSIN"]],
   ["Busan to Los Angeles", "Korea Pacific", "HBO", "KRPUS", "USLAX", true, 12, []],
 ];
 
 const schedules = [
   ["OLK", "CNYTN", "USLGB", "ZEX Express", "Transpacific Eastbound", "EVER GLORY", "EG512E", "2026-07-17T22:00:00Z", "2026-07-30T08:00:00Z", 13, true, "Weekly / Fri", "Yantian Intl Terminal", "LBCT", 94, "NORMAL", 0, []],
   ["PST", "CNSHA", "USLAX", "Pacific Arrow", "China US West Coast", "PACIFIC BRIDGE", "PB193E", "2026-07-18T18:30:00Z", "2026-08-01T06:00:00Z", 14, true, "Weekly / Sat", "Yangshan Phase IV", "West Basin", 89, "CUTOFF_SOON", 0, []],
-  ["BWS", "CNNGB", "NLRTM", "Eurasia Loop", "Asia Europe Mainline", "BLUE HORIZON", "BH728W", "2026-07-19T15:00:00Z", "2026-08-18T13:00:00Z", 30, false, "Weekly / Sun", "Ningbo Beilun", "RWG", 91, "NORMAL", 0, ["SGSIN"]],
+  ["BWS", "CNNBO", "NLRTM", "Eurasia Loop", "Asia Europe Mainline", "BLUE HORIZON", "BH728W", "2026-07-19T15:00:00Z", "2026-08-18T13:00:00Z", 30, false, "Weekly / Sun", "Ningbo Beilun", "RWG", 91, "NORMAL", 0, ["SGSIN"]],
   ["GHN", "CNSHA", "DEHAM", "North Europe Bridge", "Shanghai Hamburg", "GLOBAL DAWN", "GD306W", "2026-07-20T20:00:00Z", "2026-08-21T10:00:00Z", 32, false, "Weekly / Mon", "Waigaoqiao", "CTA", 86, "EXPECTED_DELAY", 8, ["KRPUS"]],
-  ["SBD", "CNTAO", "USLAX", "North China West Coast", "North China USWC", "SEA BRIDGE", "SB118E", "2026-07-18T23:00:00Z", "2026-08-04T07:00:00Z", 17, false, "Twice weekly", "QQCT", "TraPac", 82, "NORMAL", 0, ["KRPUS"]],
+  ["SBD", "CNQIN", "USLAX", "North China West Coast", "North China USWC", "SEA BRIDGE", "SB118E", "2026-07-18T23:00:00Z", "2026-08-04T07:00:00Z", 17, false, "Twice weekly", "QQCT", "TraPac", 82, "NORMAL", 0, ["KRPUS"]],
   ["ABL", "CNSHK", "USLGB", "Pearl River Express", "Shekou Long Beach", "NORTH STAR", "NS091E", "2026-07-21T21:00:00Z", "2026-08-03T09:00:00Z", 13, true, "Weekly / Tue", "SCT", "Pier T", 96, "NORMAL", 0, []],
   ["SBD", "CNSHA", "SGSIN", "Asia Shuttle", "Shanghai Singapore", "ASIA EXPRESS", "AX220S", "2026-07-16T16:00:00Z", "2026-07-22T06:00:00Z", 6, true, "Three weekly", "Yangshan", "Pasir Panjang", 93, "CUTOFF_SOON", 0, []],
   ["BWS", "SGSIN", "NLRTM", "Ocean Bridge", "Singapore Rotterdam", "OCEAN STAR", "OS420W", "2026-07-23T12:00:00Z", "2026-08-15T04:00:00Z", 23, true, "Weekly / Thu", "Pasir Panjang", "RWG", 90, "NORMAL", 0, []],
-  ["PST", "CNXMN", "USLAX", "Pacific Vista", "Xiamen LA", "PACIFIC TRADER", "PT681E", "2026-07-19T21:00:00Z", "2026-08-05T13:00:00Z", 17, false, "Weekly / Sun", "XHICT", "West Basin", 78, "DELAYED", 18, ["CNYTN"]],
-  ["SBD", "CNTAO", "DEHAM", "North Europe Link", "Qingdao Hamburg", "SEA VENTURE", "SV772W", "2026-07-21T11:00:00Z", "2026-08-24T09:00:00Z", 34, false, "Weekly / Tue", "QQCT", "CTA", 74, "NORMAL", 0, ["KRPUS", "NLRTM"]],
+  ["PST", "CNXAM", "USLAX", "Pacific Vista", "Xiamen LA", "PACIFIC TRADER", "PT681E", "2026-07-19T21:00:00Z", "2026-08-05T13:00:00Z", 17, false, "Weekly / Sun", "XHICT", "West Basin", 78, "DELAYED", 18, ["CNYTN"]],
+  ["SBD", "CNQIN", "DEHAM", "North Europe Link", "Qingdao Hamburg", "SEA VENTURE", "SV772W", "2026-07-21T11:00:00Z", "2026-08-24T09:00:00Z", 34, false, "Weekly / Tue", "QQCT", "CTA", 74, "NORMAL", 0, ["KRPUS", "NLRTM"]],
   ["GHN", "CNYTN", "USLAX", "South China Loop", "Yantian LA", "GLOBAL WIND", "GW881E", "2026-07-24T20:00:00Z", "2026-08-07T08:00:00Z", 14, true, "Weekly / Fri", "YICT", "TraPac", 88, "CANCELLED", 0, []],
-  ["NSL", "CNNGB", "USLGB", "Ningbo West Coast", "Ningbo Long Beach", "NORTH HORIZON", "NH338E", "2026-07-22T19:00:00Z", "2026-08-05T07:00:00Z", 14, true, "Weekly / Wed", "Beilun", "Pier T", 92, "NORMAL", 0, []],
+  ["NSL", "CNNBO", "USLGB", "Ningbo West Coast", "Ningbo Long Beach", "NORTH HORIZON", "NH338E", "2026-07-22T19:00:00Z", "2026-08-05T07:00:00Z", 14, true, "Weekly / Wed", "Beilun", "Pier T", 92, "NORMAL", 0, []],
   ["PST", "CNSHA", "USLAX", "Pacific Arrow", "China US West Coast", "PACIFIC LIGHT", "PL228E", "2026-07-25T19:00:00Z", "2026-08-08T05:00:00Z", 14, true, "Weekly / Sat", "Yangshan", "West Basin", 87, "NORMAL", 0, []],
-  ["BWS", "CNNGB", "NLRTM", "Eurasia Loop", "Asia Europe Mainline", "BLUE COMET", "BC902W", "2026-07-26T14:00:00Z", "2026-08-27T09:00:00Z", 32, false, "Weekly / Sun", "Beilun", "RWG", 85, "EXPECTED_DELAY", 6, ["SGSIN"]],
+  ["BWS", "CNNBO", "NLRTM", "Eurasia Loop", "Asia Europe Mainline", "BLUE COMET", "BC902W", "2026-07-26T14:00:00Z", "2026-08-27T09:00:00Z", 32, false, "Weekly / Sun", "Beilun", "RWG", 85, "EXPECTED_DELAY", 6, ["SGSIN"]],
   ["GHN", "CNSHA", "DEHAM", "North Europe Bridge", "Shanghai Hamburg", "GLOBAL RIVER", "GR418W", "2026-07-27T18:00:00Z", "2026-08-29T11:00:00Z", 33, false, "Weekly / Mon", "Waigaoqiao", "CTA", 80, "NORMAL", 0, ["KRPUS", "NLRTM"]],
 ];
 
@@ -94,9 +95,9 @@ const containerRateFactors = { TWENTY_GP: 0.72, FORTY_GP: 1, FORTY_HC: 1.12, FOR
 const rateGroups = [
   ["PST", "CNSHA", "USLAX", "Pacific Arrow", "PACIFIC BRIDGE", "PB193E", "2026-07-18T18:30:00Z", 14, true, 0, 94, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-15T23:59:59Z", 2780],
   ["OLK", "CNYTN", "USLGB", "ZEX Express", "EVER GLORY", "EG512E", "2026-07-17T22:00:00Z", 13, true, 0, 92, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-12T23:59:59Z", 2650],
-  ["BWS", "CNNGB", "NLRTM", "Eurasia Loop", "BLUE HORIZON", "BH728W", "2026-07-19T15:00:00Z", 31, false, 1, 91, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-20T23:59:59Z", 3920],
+  ["BWS", "CNNBO", "NLRTM", "Eurasia Loop", "BLUE HORIZON", "BH728W", "2026-07-19T15:00:00Z", 31, false, 1, 91, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-20T23:59:59Z", 3920],
   ["GHN", "CNSHA", "DEHAM", "North Europe Bridge", "GLOBAL DAWN", "GD306W", "2026-07-20T20:00:00Z", 32, false, 1, 86, "ACTIVE", "2026-07-01T00:00:00Z", "2026-07-19T23:59:59Z", 4080],
-  ["SBD", "CNTAO", "USLAX", "North China West Coast", "SEA BRIDGE", "SB118E", "2026-07-18T23:00:00Z", 17, false, 1, 82, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-18T23:59:59Z", 3020],
+  ["SBD", "CNQIN", "USLAX", "North China West Coast", "SEA BRIDGE", "SB118E", "2026-07-18T23:00:00Z", 17, false, 1, 82, "ACTIVE", "2026-07-01T00:00:00Z", "2026-08-18T23:59:59Z", 3020],
   ["BWS", "SGSIN", "NLRTM", "Ocean Bridge", "OCEAN STAR", "OS420W", "2026-07-23T12:00:00Z", 23, true, 0, 90, "EXPIRED", "2026-06-01T00:00:00Z", "2026-07-10T23:59:59Z", 3440],
 ];
 
@@ -153,9 +154,9 @@ async function seedCarrierPortMappings() {
     const carrier = await prisma.carrier.findUniqueOrThrow({ where: { code: String(carrierCode) } });
     const port = await prisma.port.findUniqueOrThrow({ where: { locode: String(locode) } });
     await prisma.carrierPortMapping.upsert({
-      where: { carrierId_portId: { carrierId: carrier.id, portId: port.id } },
+      where: { carrierId_portId_codeType: { carrierId: carrier.id, portId: port.id, codeType: "" } },
       update: { mappingValue: String(mappingValue) },
-      create: { carrierId: carrier.id, portId: port.id, mappingValue: String(mappingValue) },
+      create: { carrierId: carrier.id, portId: port.id, codeType: "", mappingValue: String(mappingValue) },
     });
   }
 }
@@ -170,9 +171,9 @@ async function seedSchedules() {
     const etdDate = date(etd);
     const etaDate = date(eta);
     const schedule = await prisma.sailingSchedule.upsert({
-      where: { carrierId_vesselName_voyageNumber_originPortId_destinationPortId_etd: { carrierId: carrier.id, vesselName: String(vesselName), voyageNumber: String(voyageNumber), originPortId: originPort.id, destinationPortId: destinationPort.id, etd: etdDate } },
-      update: { routeId: route?.id, serviceName: String(serviceName), routeName: String(routeName), eta: etaDate, transitDays: Number(transitDays), direct: Boolean(direct), stopCount: transitCodes.length, frequency: String(frequency), originTerminal: String(originTerminal), destinationTerminal: String(destinationTerminal), cyOpenTime: addDays(etd, -5), siCutOffTime: addDays(etd, -2), vgmCutOffTime: addDays(etd, -1), customsCutOffTime: addDays(etd, -1), estimatedBerthingTime: addHours(etd, -8), departureReliability: Number(reliability), status: String(status), delayHours: Number(delayHours), originalEtd: Number(delayHours) ? addHours(etd, -Number(delayHours)) : null, originalEta: Number(delayHours) ? addHours(eta, -Number(delayHours)) : null, lastUpdatedAt: new Date() },
-      create: { carrierId: carrier.id, routeId: route?.id, serviceName: String(serviceName), routeName: String(routeName), vesselName: String(vesselName), voyageNumber: String(voyageNumber), originPortId: originPort.id, destinationPortId: destinationPort.id, etd: etdDate, eta: etaDate, transitDays: Number(transitDays), direct: Boolean(direct), stopCount: transitCodes.length, frequency: String(frequency), originTerminal: String(originTerminal), destinationTerminal: String(destinationTerminal), cyOpenTime: addDays(etd, -5), siCutOffTime: addDays(etd, -2), vgmCutOffTime: addDays(etd, -1), customsCutOffTime: addDays(etd, -1), estimatedBerthingTime: addHours(etd, -8), departureReliability: Number(reliability), status: String(status), delayHours: Number(delayHours), originalEtd: Number(delayHours) ? addHours(etd, -Number(delayHours)) : null, originalEta: Number(delayHours) ? addHours(eta, -Number(delayHours)) : null, lastUpdatedAt: new Date() },
+      where: { carrierId_vesselName_voyageNumber_originPortId_destinationPortId_etd_source: { carrierId: carrier.id, vesselName: String(vesselName), voyageNumber: String(voyageNumber), originPortId: originPort.id, destinationPortId: destinationPort.id, etd: etdDate, source: "SEED" } },
+      update: { routeId: route?.id, serviceName: String(serviceName), routeName: String(routeName), eta: etaDate, transitDays: Number(transitDays), direct: Boolean(direct), stopCount: transitCodes.length, frequency: String(frequency), originTerminal: String(originTerminal), destinationTerminal: String(destinationTerminal), cyOpenTime: addDays(etd, -5), siCutOffTime: addDays(etd, -2), vgmCutOffTime: addDays(etd, -1), customsCutOffTime: addDays(etd, -1), estimatedBerthingTime: addHours(etd, -8), departureReliability: Number(reliability), status: String(status), delayHours: Number(delayHours), originalEtd: Number(delayHours) ? addHours(etd, -Number(delayHours)) : null, originalEta: Number(delayHours) ? addHours(eta, -Number(delayHours)) : null, source: "SEED", lastUpdatedAt: new Date() },
+      create: { carrierId: carrier.id, routeId: route?.id, serviceName: String(serviceName), routeName: String(routeName), vesselName: String(vesselName), voyageNumber: String(voyageNumber), originPortId: originPort.id, destinationPortId: destinationPort.id, etd: etdDate, eta: etaDate, transitDays: Number(transitDays), direct: Boolean(direct), stopCount: transitCodes.length, frequency: String(frequency), originTerminal: String(originTerminal), destinationTerminal: String(destinationTerminal), cyOpenTime: addDays(etd, -5), siCutOffTime: addDays(etd, -2), vgmCutOffTime: addDays(etd, -1), customsCutOffTime: addDays(etd, -1), estimatedBerthingTime: addHours(etd, -8), departureReliability: Number(reliability), status: String(status), delayHours: Number(delayHours), originalEtd: Number(delayHours) ? addHours(etd, -Number(delayHours)) : null, originalEta: Number(delayHours) ? addHours(eta, -Number(delayHours)) : null, source: "SEED", lastUpdatedAt: new Date() },
     });
     await prisma.scheduleTransitPort.deleteMany({ where: { scheduleId: schedule.id } });
     await prisma.scheduleRouteNode.deleteMany({ where: { scheduleId: schedule.id } });

@@ -58,6 +58,8 @@ export type CoscoSchedulePreview = {
   destinationLocode: string | null;
   etd: string | null;
   eta: string | null;
+  etdTimeKnown?: boolean;
+  etaTimeKnown?: boolean;
   transitDays: number | null;
   direct: boolean | null;
   stopCount: number | null;

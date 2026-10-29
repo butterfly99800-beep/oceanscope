@@ -67,8 +67,16 @@ function createVesselElement(vessel: Vessel, isSelected: boolean) {
   return button;
 }
 
-function popupHtml(port: Port) {
-  return `<div class="atlas-map-popup"><div class="atlas-map-popup-title">${port.name}</div><div>${port.country} · ${port.locode}</div><dl><dt>当前船舶数量</dt><dd>${port.vesselCount}</dd><dt>等待船舶数量</dt><dd>${port.waitingVesselCount}</dd><dt>平均等待时间</dt><dd>${port.averageWaitingHours} 小时</dd></dl></div>`;
+function popupContent(port: Port) {
+  const root = document.createElement("div"); root.className = "atlas-map-popup";
+  const title = document.createElement("div"); title.className = "atlas-map-popup-title"; title.textContent = port.name;
+  const subtitle = document.createElement("div"); subtitle.textContent = port.country + " · " + port.locode;
+  const list = document.createElement("dl");
+  for (const [label, value] of [["当前船舶数量", port.vesselCount], ["等待船舶数量", port.waitingVesselCount], ["平均等待时间", port.averageWaitingHours + " 小时"]]) {
+    const term = document.createElement("dt"); term.textContent = String(label);
+    const detail = document.createElement("dd"); detail.textContent = String(value); list.append(term, detail);
+  }
+  root.append(title, subtitle, list); return root;
 }
 
 function updateMarkerSelection(markers: globalThis.Map<string, MarkerRecord>, selectedVesselId: string | null) {
@@ -107,7 +115,7 @@ export function AtlasMap({ vessels, ports, routes, routeOptions, selectedEntity,
     popupRef.current?.remove();
     popupRef.current = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat([port.longitude, port.latitude])
-      .setHTML(popupHtml(port))
+      .setDOMContent(popupContent(port))
       .addTo(map);
   }, []);
 

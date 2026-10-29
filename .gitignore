@@ -1,5 +1,7 @@
 node_modules
 .next
+.next-validation
+.next-edge-validation
 out
 dist
 .env*
@@ -11,3 +13,13 @@ dist
 
 # Local scraper debug output
 tmp/
+
+# Release hygiene: keep local artifacts without publishing them
+reports/
+*.tsbuildinfo
+*.zip
+backups/
+.next*/
+*.dump
+*.sql.gz
+.env.*.local

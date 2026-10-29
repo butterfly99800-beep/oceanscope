@@ -4,10 +4,10 @@ export function sortSchedules(schedules: SailingSchedule[], sort: ScheduleSortOp
   return [...schedules].sort((a, b) => {
     if (sort === "earliestDeparture") return a.etd.localeCompare(b.etd);
     if (sort === "earliestArrival") return a.eta.localeCompare(b.eta);
-    if (sort === "shortestTransit") return a.transitDays - b.transitDays;
-    if (sort === "fewestStops") return a.stopCount - b.stopCount || a.transitDays - b.transitDays;
-    const aScore = Number(a.direct) * 2 - a.stopCount;
-    const bScore = Number(b.direct) * 2 - b.stopCount;
+    if (sort === "shortestTransit") return (a.transitDays ?? Number.MAX_SAFE_INTEGER) - (b.transitDays ?? Number.MAX_SAFE_INTEGER);
+    if (sort === "fewestStops") return (a.stopCount ?? Number.MAX_SAFE_INTEGER) - (b.stopCount ?? Number.MAX_SAFE_INTEGER) || (a.transitDays ?? Number.MAX_SAFE_INTEGER) - (b.transitDays ?? Number.MAX_SAFE_INTEGER);
+    const aScore = a.direct === true ? 2 : a.direct === false ? -(a.stopCount ?? 0) : -100;
+    const bScore = b.direct === true ? 2 : b.direct === false ? -(b.stopCount ?? 0) : -100;
     return bScore - aScore || a.etd.localeCompare(b.etd);
   });
 }

@@ -15,7 +15,7 @@ export interface CoscoCitySelection {
 
 export interface PortOption {
   id: string;
-  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY";
+  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY";
   name: string;
   localName: string;
   country: string;
@@ -59,13 +59,13 @@ export interface ScheduleTransitPort {
 
 export interface SailingSchedule {
   id: string;
-  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY";
+  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY";
   carrier: string;
   carrierCode: string;
-  serviceName: string;
-  routeName: string;
-  vesselName: string;
-  voyageNumber: string;
+  serviceName: string | null;
+  routeName: string | null;
+  vesselName: string | null;
+  voyageNumber: string | null;
   originPort: string;
   originPortCode: string;
   destinationPort: string;
@@ -73,34 +73,32 @@ export interface SailingSchedule {
   transitPorts: ScheduleTransitPort[];
   etd: string;
   eta: string;
+  etdTimeKnown?: boolean;
+  etaTimeKnown?: boolean;
   originalEtd?: string;
   originalEta?: string;
-  transitDays: number;
-  direct: boolean;
-  stopCount: number;
-  frequency: string;
-  terminal: string;
-  destinationTerminal: string;
-  cutOffTime: string;
-  availableTime?: string;
-  siCutOffTime: string;
-  vgmCutOffTime: string;
-  cyOpenTime: string;
-  estimatedBerthingTime: string;
-  departureReliability: number;
-  scheduleStatus: ScheduleStatus;
-  delayHours: number;
+  transitDays: number | null;
+  direct: boolean | null;
+  stopCount: number | null;
+  cargoNature?: string | null;
+  terminal: string | null;
+  destinationTerminal: string | null;
+  cutOffTime: string | null;
+  availableTime: string | null;
   lastUpdated: string;
-  routeNodes: ScheduleRouteNode[];
-  tags: ScheduleTag[];
-  terminalRemark: string;
+  rawSourceAvailable?: boolean;
+  frequency?: string;
+  scheduleStatus?: ScheduleStatus;
+  delayHours?: number;
+  routeNodes?: ScheduleRouteNode[];
+  tags?: ScheduleTag[];
+  terminalRemark?: string;
 }
 
 export interface ScheduleFilterState {
   carriers: string[];
   direct: "all" | "direct" | "transit";
   stopCount: "all" | "direct" | "one" | "twoPlus";
-  statuses: ScheduleStatus[];
   departureFrom: string;
   transitDays: "all" | "0-15" | "16-25" | "26-35" | "35+";
   serviceName: string;
@@ -109,6 +107,8 @@ export interface ScheduleFilterState {
 }
 
 export interface RecentScheduleSearch {
+  originName?: string;
+  destinationName?: string;
   id: string;
   originPortId: string;
   destinationPortId: string;
@@ -121,7 +121,5 @@ export interface FavoriteSchedule {
   scheduleId: string;
   createdAt: string;
 }
-
-
 
 

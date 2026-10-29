@@ -27,27 +27,8 @@ function extractLocode(text: string) {
 
 function normalizePortCode(code: string | null | undefined, portName: string | null | undefined) {
   const value = normalizeCoscoText(code).toUpperCase();
-  const name = normalizeCoscoText(portName).toLowerCase();
-  const known: Record<string, string> = {
-    SHA: "CNSHA",
-    NGB: "CNNGB",
-    YTN: "CNYTN",
-    SHK: "CNSHK",
-    TAO: "CNTAO",
-    XMN: "CNXMN",
-    SIN: "SGSIN",
-    LGB: "USLGB",
-    LAX: "USLAX",
-    LSA: "USLAX",
-    RTM: "NLRTM",
-    HAM: "DEHAM",
-    PUS: "KRPUS",
-  };
+  void portName;
   if (value.length === 5) return value;
-  if (known[value]) return known[value];
-  if (name.includes("shanghai")) return "CNSHA";
-  if (name.includes("long beach")) return "USLGB";
-  if (name.includes("los angeles")) return "USLAX";
   return null;
 }
 
@@ -75,6 +56,12 @@ function asNumber(value: unknown) {
   return null;
 }
 
+function asBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string" && /^(true|false)$/i.test(value.trim())) return value.trim().toLowerCase() === "true";
+  return null;
+}
+
 function findScheduleArrays(value: unknown): JsonRecord[][] {
   if (Array.isArray(value)) {
     const records = value.filter(isRecord);
@@ -87,14 +74,36 @@ function findScheduleArrays(value: unknown): JsonRecord[][] {
 
 export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: string, destination: string): CoscoSchedulePreview[] {
   const arrays = payloads.flatMap(findScheduleArrays);
-  const records = arrays.flat();
+  const groups: JsonRecord[][] = [];
+  for (const records of arrays) {
+    let current: JsonRecord[] | null = null;
+    for (const record of records) {
+      const sequence = asNumber(record.legSequence);
+      if (sequence === null || sequence === 1) {
+        current = [record];
+        groups.push(current);
+      } else if (current) current.push(record);
+      // An orphan continuation is never a standalone end-to-end schedule.
+    }
+  }
   const seen = new Set<string>();
   const schedules: CoscoSchedulePreview[] = [];
 
-  for (const item of records) {
+  for (const legs of groups) {
+    if (legs.some((leg, index) => index > 0 && (asNumber(leg.legSequence) !== index + 1
+      || asString(legs[index - 1].pod) !== asString(leg.pol)
+      || !parseCoscoDate(asString(leg.etd)) || !parseCoscoDate(asString(legs[index - 1].eta))
+      || parseCoscoDate(asString(leg.etd))! < parseCoscoDate(asString(legs[index - 1].eta))!))) continue;
+    const first = legs[0];
+    const last = legs[legs.length - 1];
+    const item: JsonRecord = { ...first, pod: last.pod, podPortCode: last.podPortCode, eta: last.eta,
+      available: last.available, inboundFacilityName: last.inboundFacilityName,
+      inboundHaulage: last.inboundHaulage ?? first.inboundHaulage };
     const vesselName = asString(item.vessel);
-    const etd = parseCoscoDate(asString(item.etd));
-    const eta = parseCoscoDate(asString(item.eta));
+    const etdText = asString(item.etd);
+    const etaText = asString(item.eta);
+    const etd = parseCoscoDate(etdText);
+    const eta = parseCoscoDate(etaText);
     if (!vesselName || !etd || !eta) continue;
 
     const serviceName = asString(item.service) || null;
@@ -110,32 +119,37 @@ export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: str
     const destinationFacilityName = asString(item.inboundFacilityName) || null;
     const outboundHaulage = asString(item.outboundHaulage) || null;
     const inboundHaulage = asString(item.inboundHaulage) || null;
-    const key = [vesselName, serviceName, voyageNumber, originText, destinationText, etd].join("|");
+    const legIdentity = legs.length > 1 ? JSON.stringify(legs.map(leg => [leg.vessel, leg.extVoyage || leg.voyage, leg.pol, leg.pod])) : "";
+    const key = [vesselName, serviceName, voyageNumber, originText, destinationText, etd, legIdentity].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
 
     const deList1 = Array.isArray(item.deList1) ? item.deList1.filter(isRecord) : [];
     const deList2 = Array.isArray(item.deList2) ? item.deList2.filter(isRecord) : [];
-    const transitPorts = [...deList1, ...deList2]
+    const transitPorts = [...legs.slice(0, -1).map(leg => asString(leg.pod)), ...[...deList1, ...deList2]
       .map((port) => asString(port.portName) || asString(port.pod) || asString(port.pol))
-      .filter(Boolean);
+      .filter(Boolean)];
+    const direct = asBoolean(item.direct) ?? asBoolean(item.isDirect) ?? (transitPorts.length ? false : null);
+    const explicitStopCount = asNumber(item.stopCount) ?? asNumber(item.transshipmentCount);
 
     schedules.push({
       id: `${stableId(key)}-${schedules.length}`,
       carrierName: "COSCO SHIPPING",
       serviceName,
-      routeName: `${originText} -> ${destinationText}`,
+      routeName: null,
       vesselName,
       voyageNumber,
       originText,
       destinationText,
-      originLocode: normalizePortCode(asString(item.polPortCode), originText) ?? extractLocode(origin),
-      destinationLocode: normalizePortCode(asString(item.podPortCode), destinationText) ?? extractLocode(destination),
+      originLocode: normalizePortCode(asString(item.polPortCode), originText),
+      destinationLocode: normalizePortCode(asString(item.podPortCode), destinationText),
       etd,
       eta,
+      etdTimeKnown: /\d{1,2}:\d{2}/.test(etdText),
+      etaTimeKnown: /\d{1,2}:\d{2}/.test(etaText),
       transitDays,
-      direct: transitPorts.length === 0,
-      stopCount: transitPorts.length,
+      direct,
+      stopCount: explicitStopCount ?? (transitPorts.length ? transitPorts.length : null),
       transitPorts,
       cargoNature,
       cutOffTime,
@@ -144,7 +158,7 @@ export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: str
       destinationFacilityName,
       outboundHaulage,
       inboundHaulage,
-      rawText: JSON.stringify({ vesselName, serviceName, voyageNumber, originText, destinationText, etd, eta, transitDays, cargoNature, cutOffTime, availableTime, originFacilityName, destinationFacilityName, outboundHaulage, inboundHaulage }),
+      rawText: legs.length > 1 ? JSON.stringify({ officialLegs: legs }) : JSON.stringify(first),
     });
   }
 
@@ -157,7 +171,8 @@ export function mapDomRowsToCoscoSchedules(rows: string[], origin: string, desti
     .filter((row) => row.length > 40 && /20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}/.test(row))
     .slice(0, 80)
     .map((row, index) => {
-      const dates = Array.from(row.matchAll(/20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2})?/g)).map((item) => parseCoscoDate(item[0])).filter((item): item is string => Boolean(item));
+      const dateTexts = Array.from(row.matchAll(/20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2})?/g)).map((item) => item[0]);
+      const dates = dateTexts.map((item) => parseCoscoDate(item)).filter((item): item is string => Boolean(item));
       const vesselBlock = row.match(/(?:\d{2}:\d{2}(?:\([A-Za-z.]+\))?\s+)([A-Z][A-Z0-9 .'-]{2,60})\s*\/([A-Z0-9-]{2,20})\/([A-Z0-9-]{2,30})/);
       const vesselName = vesselBlock ? normalizeCoscoText(vesselBlock[1]) : null;
       const serviceName = vesselBlock ? normalizeCoscoText(vesselBlock[2]) : null;
@@ -171,15 +186,17 @@ export function mapDomRowsToCoscoSchedules(rows: string[], origin: string, desti
         id: `${stableId(row)}-${index}`,
         carrierName: "COSCO SHIPPING",
         serviceName,
-        routeName: `${origin} -> ${destination}`,
+        routeName: null,
         vesselName,
         voyageNumber,
         originText: origin,
         destinationText: destination,
-        originLocode: extractLocode(origin) ?? (origin.toLowerCase().includes("shanghai") ? "CNSHA" : null),
-        destinationLocode: extractLocode(destination) ?? (destination.toLowerCase().includes("los angeles") ? "USLAX" : destination.toLowerCase().includes("long beach") ? "USLGB" : null),
+        originLocode: extractLocode(origin),
+        destinationLocode: extractLocode(destination),
         etd,
         eta,
+        etdTimeKnown: /\d{1,2}:\d{2}/.test(dateTexts[dates.length >= 3 ? 1 : 0] ?? ""),
+        etaTimeKnown: /\d{1,2}:\d{2}/.test(dateTexts[dates.length >= 3 ? 2 : 1] ?? ""),
         transitDays,
         direct,
         stopCount: direct === true ? 0 : direct === false ? null : null,

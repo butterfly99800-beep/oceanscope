@@ -101,7 +101,7 @@ export function AdminDatabaseResourcePage({ resource }: { resource: ResourceKind
   const [portOptions, setPortOptions] = useState<Option[]>([]);
   const [routeOptions, setRouteOptions] = useState<Option[]>([]);
   const config = useMemo(() => buildConfig(resource, carrierOptions, portOptions, routeOptions), [carrierOptions, portOptions, resource, routeOptions]);
-  const categories = useMemo(() => resource === "schedules" ? ["SEED", "MANUAL", "COSCO_LIVE_QUERY", "OOCL_LIVE_QUERY"] : Array.from(new Set(records.map((item) => text(config.categoryKey ? item[config.categoryKey] : undefined)).filter(Boolean))), [config.categoryKey, records, resource]);
+  const categories = useMemo(() => resource === "schedules" ? ["SEED", "MANUAL", "COSCO_LIVE_QUERY", "OOCL_LIVE_QUERY", "CMA_LIVE_QUERY"] : Array.from(new Set(records.map((item) => text(config.categoryKey ? item[config.categoryKey] : undefined)).filter(Boolean))), [config.categoryKey, records, resource]);
 
   const loadOptions = useCallback(async () => {
     if (!["routes", "schedules", "rates"].includes(resource)) return;

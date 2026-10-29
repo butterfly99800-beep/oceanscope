@@ -1,5 +1,7 @@
 # OceanScope
 
+> 生产部署请先阅读 [Ubuntu 新空库部署说明](docs/DEPLOYMENT.md)。当前迁移基线只适用于新建空库，不可用于旧 OceanScope 数据库。默认 seed 已禁用。
+
 OceanScope 是一个基于 Next.js 15 构建的国际物流 SaaS 平台，提供船期查询、运费对比、订单管理和航运地图可视化等功能。采用 Prisma + MySQL 作为数据层，集成 COSCO 中远海运实时船期数据抓取。
 
 ## 技术栈
@@ -77,7 +79,7 @@ oceanscope/
 ### 1. 安装依赖
 
 ```bash
-npm install
+npm ci
 ```
 
 ### 2. 配置环境变量
@@ -94,11 +96,10 @@ cp .env.example .env
 # 生成 Prisma Client
 npm run db:generate
 
-# 执行数据库迁移
-npm run db:migrate
+# 仅对新建空库应用基线，已有库禁止执行
+OCEANSCOPE_DATABASE_MODE=fresh-baseline npm run db:deploy
 
-# 导入种子数据
-npm run db:seed
+# 生产主数据和管理员分别初始化，见 docs/DEPLOYMENT.md
 ```
 
 ### 4. 安装 Playwright 浏览器（可选，COSCO 浏览器模式需要）
@@ -146,7 +147,7 @@ npm run dev
 
 ## 种子账号
 
-执行 `npm run db:seed` 后自动创建：
+仅在隔离开发数据库明确启用 `OCEANSCOPE_ALLOW_DEMO_SEED=true npm run db:seed:demo` 后创建演示账号；生产禁止使用：
 
 | 角色 | 邮箱 | 密码 |
 |------|------|------|
@@ -247,13 +248,14 @@ npm run start
 | `npm run start` | 启动生产服务 |
 | `npm run lint` | ESLint 代码检查 |
 | `npm run db:generate` | 生成 Prisma Client |
-| `npm run db:migrate` | 执行数据库迁移 |
-| `npm run db:seed` | 导入种子数据 |
+| `npm run db:migrate` | 仅开发环境的 migrate dev，生产禁止使用 |
+| `npm run db:deploy` | 受保护的新空库迁移 |
+| `npm run db:seed` | 默认拒绝执行，生产禁用 |
 | `npm run db:studio` | 打开 Prisma Studio 数据库可视化 |
 
 ## 注意事项
 
 - COSCO 船期抓取仅供测试使用，请遵守目标网站的使用条款和 robots 协议
-- 生产环境请务必修改默认种子密码和 NEXTAUTH_SECRET
+- 生产不创建演示账号；独立初始化管理员并配置私有 NEXTAUTH_SECRET
 - MapLibre 地图仅在客户端加载，避免 SSR 阶段访问浏览器 API
 - 不要提交 `.env`、`node_modules`、`.next` 等包含敏感信息或构建产物的文件

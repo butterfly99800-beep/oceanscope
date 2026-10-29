@@ -1,8 +1,8 @@
-﻿import type { Port, RegionOption, Route, RouteOption, Vessel } from "@/features/atlas/types";
+import type { Port, RegionOption, Route, RouteOption, Vessel } from "@/features/atlas/types";
 
 export const atlasPorts: Port[] = [
-  { id: "shanghai", name: "Shanghai", nameZh: "上海", aliases: ["上海", "上海港"], country: "China", region: "东亚", latitude: 31.2304, longitude: 121.4737, locode: "CNSHA", vesselCount: 128, waitingVesselCount: 18, averageWaitingHours: 9.5, x: 71, y: 45 },
-  { id: "ningbo", name: "Ningbo", nameZh: "宁波", aliases: ["宁波", "宁波港"], country: "China", region: "东亚", latitude: 29.8746, longitude: 121.5503, locode: "CNNGB", vesselCount: 84, waitingVesselCount: 11, averageWaitingHours: 7.8, x: 72, y: 48 },
+  { id: "shanghai", name: "Shanghai", nameZh: "上海", aliases: ["上海", "上海港"], country: "China", region: "东亚", latitude: 31.2304, longitude: 121.4737, locode: "CNSGH", vesselCount: 128, waitingVesselCount: 18, averageWaitingHours: 9.5, x: 71, y: 45 },
+  { id: "ningbo", name: "Ningbo", nameZh: "宁波", aliases: ["宁波", "宁波港"], country: "China", region: "东亚", latitude: 29.8746, longitude: 121.5503, locode: "CNNBO", vesselCount: 84, waitingVesselCount: 11, averageWaitingHours: 7.8, x: 72, y: 48 },
   { id: "yantian", name: "Yantian", nameZh: "盐田", aliases: ["盐田", "盐田港", "深圳盐田"], country: "China", region: "东亚", latitude: 22.58, longitude: 114.27, locode: "CNYTN", vesselCount: 62, waitingVesselCount: 9, averageWaitingHours: 6.4, x: 69, y: 53 },
   { id: "singapore", name: "Singapore", nameZh: "新加坡", aliases: ["新加坡", "新加坡港"], country: "Singapore", region: "东南亚", latitude: 1.3521, longitude: 103.8198, locode: "SGSIN", vesselCount: 146, waitingVesselCount: 22, averageWaitingHours: 10.2, x: 64, y: 67 },
   { id: "los-angeles", name: "Los Angeles", nameZh: "洛杉矶", aliases: ["洛杉矶", "洛杉矶港"], country: "United States", region: "北美西岸", latitude: 34.0522, longitude: -118.2437, locode: "USLAX", vesselCount: 71, waitingVesselCount: 14, averageWaitingHours: 13.7, x: 18, y: 47 },

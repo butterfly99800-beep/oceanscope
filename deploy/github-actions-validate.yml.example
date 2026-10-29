@@ -1,0 +1,61 @@
+name: Validate OceanScope
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-not-a-production-secret
+          MYSQL_DATABASE: oceanscope_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:ci-only-not-a-production-secret@127.0.0.1:3306/oceanscope_ci
+      OCEANSCOPE_DATABASE_MODE: fresh-baseline
+      NEXTAUTH_SECRET: ci-only-disposable-auth-secret-not-for-production
+      NEXTAUTH_URL: http://127.0.0.1:3003
+      PORT: 3003
+      SCHEDULE_LIVE_FETCH_ENABLED: "false"
+      COSCO_SCRAPER_ENABLED: "false"
+      SHOW_SEED_SCHEDULES: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npx --no-install prisma validate
+      - run: npm test
+      - run: npm run db:deploy
+      - run: npm run db:deploy
+      - name: Compare actual MySQL schema
+        run: npx --no-install prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run: npx --no-install tsc --noEmit
+      - run: npm run build
+      - name: Production startup and API smoke
+        run: |
+          npm start > /tmp/oceanscope-start.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3003/api/auth/providers >/dev/null; then break; fi
+            sleep 2
+          done
+          node scripts/check-production-smoke.cjs

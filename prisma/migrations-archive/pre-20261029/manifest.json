@@ -1,0 +1,46 @@
+[
+  {
+    "name": "20260714012442_init_core_data",
+    "sha256": "f745a11e983cd4951e2bc5a3f9c008fd208d1641fff9d298d7e9c440b9e9cbd2"
+  },
+  {
+    "name": "20260714020734_add_sailing_schedules",
+    "sha256": "633682694e7455ed3a455ac9e202c33d767b57226ef84bfd8af68afbd30a9b7c"
+  },
+  {
+    "name": "20260714031602_add_rate_quotes",
+    "sha256": "589e7f6794f60f83a3d5b61054a363ac197703c8e1eae812d246514e16deb0cb"
+  },
+  {
+    "name": "20260714095701_add_booking_orders",
+    "sha256": "bb833c1c6be777e9cb5176c92974f19fe67ce84cbcbb7a37cabeb6d1eba9b0ee"
+  },
+  {
+    "name": "20260714104546_add_users_and_auth",
+    "sha256": "91c089ea653b59ed3f61f8237923dfb404ee3ead43cc9113a4a550d1875621ab"
+  },
+  {
+    "name": "20260716125443_add_user_management",
+    "sha256": "2c017780d0a4d110c70d120cd255abaf8220602e26a4458c8bf238ef3507fd22"
+  },
+  {
+    "name": "20260717000000_add_cosco_live_schedule_cache",
+    "sha256": "930aee35666e58efc0b57389b2c25e8fb3c6fe2afa513c11c4f0ba9b40b53840"
+  },
+  {
+    "name": "20260717024532_add_schedule_source",
+    "sha256": "6dcf0cf879736a8931d83303f585617d03ed8c719ecc2ffdf57e787b355a5e90"
+  },
+  {
+    "name": "20261007000000_add_codetype_and_more_sources",
+    "sha256": "a25468b7b3be4174a970e42b6a3f53af73166891e21d76160d97b0f631016b67"
+  },
+  {
+    "name": "20261008000000_add_schedule_granularity",
+    "sha256": "058d0c9b23b53e6eea98eae08d2cf42a4de69a1912a24cd3eb59dc7ce5f4ccbb"
+  },
+  {
+    "name": "20261008010000_truthful_live_schedule_fields",
+    "sha256": "064712e484e79e22f56734d1ab2998f2896717a3f00614f2b70d08af3f3ed410"
+  }
+]

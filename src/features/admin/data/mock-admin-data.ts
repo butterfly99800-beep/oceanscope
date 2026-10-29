@@ -1,12 +1,12 @@
-﻿import type { AdminRecord, AdminResourceConfig } from "@/features/admin/types";
+import type { AdminRecord, AdminResourceConfig } from "@/features/admin/types";
 
 export const ports: AdminRecord[] = [
-  { id: "p1", name: "Shanghai", nameZh: "上海", locode: "CNSHA", country: "China", region: "东亚", latitude: 31.2304, longitude: 121.4737, status: "启用", updatedAt: "2026-07-13" },
-  { id: "p2", name: "Ningbo", nameZh: "宁波", locode: "CNNGB", country: "China", region: "东亚", latitude: 29.8746, longitude: 121.5503, status: "启用", updatedAt: "2026-07-13" },
+  { id: "p1", name: "Shanghai", nameZh: "上海", locode: "CNSGH", country: "China", region: "东亚", latitude: 31.2304, longitude: 121.4737, status: "启用", updatedAt: "2026-07-13" },
+  { id: "p2", name: "Ningbo", nameZh: "宁波", locode: "CNNBO", country: "China", region: "东亚", latitude: 29.8746, longitude: 121.5503, status: "启用", updatedAt: "2026-07-13" },
   { id: "p3", name: "Yantian", nameZh: "盐田", locode: "CNYTN", country: "China", region: "东亚", latitude: 22.58, longitude: 114.27, status: "启用", updatedAt: "2026-07-12" },
   { id: "p4", name: "Shekou", nameZh: "蛇口", locode: "CNSHK", country: "China", region: "东亚", latitude: 22.48, longitude: 113.91, status: "启用", updatedAt: "2026-07-12" },
-  { id: "p5", name: "Qingdao", nameZh: "青岛", locode: "CNTAO", country: "China", region: "东亚", latitude: 36.06, longitude: 120.38, status: "启用", updatedAt: "2026-07-11" },
-  { id: "p6", name: "Xiamen", nameZh: "厦门", locode: "CNXMN", country: "China", region: "东亚", latitude: 24.48, longitude: 118.08, status: "启用", updatedAt: "2026-07-11" },
+  { id: "p5", name: "Qingdao", nameZh: "青岛", locode: "CNQIN", country: "China", region: "东亚", latitude: 36.06, longitude: 120.38, status: "启用", updatedAt: "2026-07-11" },
+  { id: "p6", name: "Xiamen", nameZh: "厦门", locode: "CNXAM", country: "China", region: "东亚", latitude: 24.48, longitude: 118.08, status: "启用", updatedAt: "2026-07-11" },
   { id: "p7", name: "Singapore", nameZh: "新加坡", locode: "SGSIN", country: "Singapore", region: "东南亚", latitude: 1.3521, longitude: 103.8198, status: "启用", updatedAt: "2026-07-13" },
   { id: "p8", name: "Los Angeles", nameZh: "洛杉矶", locode: "USLAX", country: "United States", region: "北美西岸", latitude: 34.0522, longitude: -118.2437, status: "启用", updatedAt: "2026-07-10" },
   { id: "p9", name: "Long Beach", nameZh: "长滩", locode: "USLGB", country: "United States", region: "北美西岸", latitude: 33.7701, longitude: -118.1937, status: "启用", updatedAt: "2026-07-10" },

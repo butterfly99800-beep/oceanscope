@@ -1,0 +1,4 @@
+# Migration checksums must be identical on Windows and Linux.
+prisma/migrations/** text eol=lf
+# Preserve the exact historical bytes recorded in the archive manifest.
+prisma/migrations-archive/** -text

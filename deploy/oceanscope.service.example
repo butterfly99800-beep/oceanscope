@@ -1,0 +1,22 @@
+[Unit]
+Description=OceanScope web application
+After=network.target
+
+[Service]
+Type=simple
+User=oceanscope
+Group=oceanscope
+WorkingDirectory=/srv/oceanscope/current
+EnvironmentFile=/etc/oceanscope/oceanscope.env
+Environment=NODE_ENV=production
+Environment=PORT=3040
+ExecStart=/opt/oceanscope/node/bin/node scripts/start-production.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

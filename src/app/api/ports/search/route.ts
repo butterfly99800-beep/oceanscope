@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   const { page, pageSize, skip } = parsePagination(searchParams);
   const where: Prisma.PortWhereInput = q ? {
     OR: [
+      { id: q },
       { name: { contains: q } },
       { nameZh: { contains: q } },
       { locode: { contains: q.toUpperCase() } },

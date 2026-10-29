@@ -50,7 +50,7 @@ function timeoutMs() {
 }
 
 function isHeadless() {
-  return process.env.COSCO_SCRAPER_HEADLESS !== "false";
+  return true;
 }
 
 function log(step: string) {

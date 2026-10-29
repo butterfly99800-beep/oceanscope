@@ -1,0 +1,15 @@
+# Separate virtual host only. Replace the domain; add TLS using the host's
+# existing certificate workflow. Do not replace nginx.conf or another site.
+server {
+    listen 80;
+    server_name oceanscope.example.com;
+    client_max_body_size 1m;
+    location / {
+        proxy_pass http://127.0.0.1:3040;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+}

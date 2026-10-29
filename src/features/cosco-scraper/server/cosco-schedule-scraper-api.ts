@@ -235,8 +235,8 @@ async function querySchedules(context: APIRequestContext, origin: CitySearchResu
     timeout: 20000,
   });
   recordNetwork(network, response, "POST", postData);
-  if (response.status() === 429) throw new Error("COSCO API rate limited: 429");
-  if (response.status() === 403) throw new Error("COSCO API blocked: 403");
+  if (response.status() === 429) throw new Error("COSCO_RATE_LIMITED: official API HTTP 429");
+  if (response.status() === 403) throw new Error("COSCO_ACCESS_BLOCKED: official API HTTP 403");
   if (!response.ok()) {
     warnings.push(`schedule API returned ${response.status()}`);
     return { schedules: [] as ReturnType<typeof mapJsonPayloadsToCoscoSchedules>, payloads, warnings };
@@ -248,7 +248,11 @@ async function querySchedules(context: APIRequestContext, origin: CitySearchResu
   }
   payloads.push(payload);
   const mapped = mapJsonPayloadsToCoscoSchedules([payload], cityName(origin), cityName(destination));
-  if (!mapped.length) warnings.push("schedule API JSON did not contain recognizable schedule rows");
+  if (!mapped.length) {
+    const rows = payload?.data?.content?.data;
+    warnings.push(String(payload.code) === "200" && Array.isArray(rows) && rows.length === 0
+      ? "COSCO_NO_RESULTS" : "COSCO_PARSE_INCOMPLETE: schedule API JSON did not contain recognizable schedule rows");
+  }
   return { schedules: mapped, payloads, warnings };
 }
 

@@ -61,11 +61,12 @@ export async function normalizePort(input: string): Promise<NormalizedPort | nul
   return fuzzy ? toNormalizedPort(fuzzy) : null;
 }
 
-export async function getCarrierPortMapping(carrierCode: string, portId: string) {
+export async function getCarrierPortMapping(carrierCode: string, portId: string, codeType?: string) {
   return prisma.carrierPortMapping.findFirst({
     where: {
       portId,
       carrier: { code: carrierCode.toUpperCase() },
+      ...(codeType ? { codeType } : {}),
     },
     select: { mappingValue: true },
   });

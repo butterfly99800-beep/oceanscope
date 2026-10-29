@@ -1,0 +1,6 @@
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+for (const name of ['check-migration-baseline', 'check-cosco-itineraries', 'check-maersk-inland', 'check-provider-fallback', 'check-public-request-retry', 'check-source-port-match', 'check-live-date-window', 'check-oocl-http']) {
+  const result = spawnSync(process.execPath, [path.join(__dirname, name + '.cjs')], { stdio: 'inherit' });
+  if (result.status !== 0) process.exit(result.status || 1);
+}
