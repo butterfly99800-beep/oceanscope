@@ -80,7 +80,7 @@ function parseTransitPorts(text: string) {
   return match?.[1] ? [match[1].trim()] : [];
 }
 
-function parseDetailText(text: string, index: number, baseDate: string): CoscoSchedulePreview | null {
+function parseDetailText(text: string, index: number, baseDate: string, input: OoclProviderSearchInput): CoscoSchedulePreview | null {
   const service = parseService(detailValue(text, "Service"));
   const vessel = splitVesselVoyage(detailValue(text, "Vessel Voyage") || undefined);
   const originText = detailValue(text, "POL") || "";
@@ -91,9 +91,17 @@ function parseDetailText(text: string, index: number, baseDate: string): CoscoSc
   const transitDaysText = (detailValue(text, "Total Transit Time") || "").match(/\d+/)?.[0];
   const transitDays = transitDaysText ? Number(transitDaysText) : null;
   if (!originText || !destinationText || !etd || !eta) return null;
+  const requested = detailValue(text, "Origin");
+  const port = { ...input.originPort, nameZh: null };
+  const alternateLoading = requested && !matchesSourcePort(originText, port) && matchesSourcePort(requested, port)
+    && matchesSourcePort(destinationText, { ...input.destinationPort, nameZh: null }) && vessel.vesselName && vessel.voyageNumber
+    && etd.slice(0, 10) >= input.departureDate.slice(0, 10) && (!input.dateTo || etd.slice(0, 10) <= input.dateTo.slice(0, 10))
+    ? { id: `oocl-alt-${index}-${etd}`, origin: requested, loadingPort: originText, departure: etd, vessel: vessel.vesselName,
+        voyage: vessel.voyageNumber, destination: destinationText, arrival: eta } : undefined;
   const transitPorts = parseTransitPorts(text);
   return {
     id: `oocl-${index}-${originText}-${destinationText}-${etd}`,
+    alternateLoading,
     carrierName: "OOCL",
     serviceName: service.serviceName,
     routeName: service.routeName,
@@ -201,8 +209,8 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
       }, { http: page.request, html: await page.content(), url: page.url(), fields });
       warnings.push(...result.warnings);
       for (const text of result.texts) {
-        const item = parseDetailText(text, schedules.length + 1, input.departureDate);
-        if (item && matchesSourcePort(item.originText, { ...input.originPort, nameZh: null })
+        const item = parseDetailText(text, schedules.length + 1, input.departureDate, input);
+        if (item && (item.alternateLoading || matchesSourcePort(item.originText, { ...input.originPort, nameZh: null }))
           && matchesSourcePort(item.destinationText, { ...input.destinationPort, nameZh: null })) schedules.push(item);
       }
       if (process.env.SCHEDULE_DEBUG === "true") console.info("OOCL transport", "headless-form-http-details");
@@ -250,9 +258,9 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
       const [origin, destination] = await Promise.all([toOoclPortValue(input.originPort), toOoclPortValue(input.destinationPort)]);
       const result = await queryOoclHttp({ origin, destination, originCode: canonicalPortCode(input.originPort.locode),
         destinationCode: canonicalPortCode(input.destinationPort.locode), date: formatMobileDate(input.departureDate) });
-      const schedules = result.texts.map((text, i) => parseDetailText(text, i + 1, input.departureDate))
+      const schedules = result.texts.map((text, i) => parseDetailText(text, i + 1, input.departureDate, input))
         .filter((item): item is CoscoSchedulePreview => Boolean(item
-          && matchesSourcePort(item.originText, { ...input.originPort, nameZh: null })
+          && (item.alternateLoading || matchesSourcePort(item.originText, { ...input.originPort, nameZh: null }))
           && matchesSourcePort(item.destinationText, { ...input.destinationPort, nameZh: null })));
       if (schedules.length) {
         if (process.env.SCHEDULE_DEBUG === "true") console.info("OOCL transport", "http-only");

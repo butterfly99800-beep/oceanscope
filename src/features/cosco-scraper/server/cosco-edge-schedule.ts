@@ -1,4 +1,5 @@
-import { chromium, type Page } from "playwright";
+import type { Page } from "playwright";
+import { launchPublicBrowser } from "@/features/shipping/providers/public-browser";
 import { mapJsonPayloadsToCoscoSchedules } from "./cosco-schedule-mapper";
 import type { CoscoScheduleCriteria, CoscoScrapeResult } from "../types";
 
@@ -26,7 +27,7 @@ async function selectCity(page: Page, placeholder: RegExp, value: string, uuid?:
 
 export async function scrapeCoscoEdge(criteria: CoscoScheduleCriteria): Promise<CoscoScrapeResult> {
   const started = Date.now();
-  const browser = await chromium.launch({ ...(process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
+  const browser = await launchPublicBrowser({ channel: "msedge", lifetimeMs: 60000 });
   const deadline = setTimeout(() => { void browser.close().catch(() => undefined); }, 60000);
   try {
     const page = await browser.newPage();

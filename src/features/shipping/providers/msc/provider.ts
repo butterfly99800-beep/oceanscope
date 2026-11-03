@@ -60,10 +60,10 @@ function sessionFor(site: string, transport: Transport) {
   return value;
 }
 
-async function readRoutes(site: string, transport: Transport, originCode: string, destinationCode: string, date: string) {
+async function readRoutes(site: string, transport: Transport, originCodes: string[], destinationCodes: string[], date: string) {
   const session = await sessionFor(site, transport);
   const find = (code: string) => session.ports.find(port => samePortCode(port.LocationCode, code));
-  const origin = find(originCode), destination = find(destinationCode);
+  const origin = originCodes.map(find).find(Boolean), destination = destinationCodes.map(find).find(Boolean);
   if (!origin || !destination) throw new Error("MSC_PORT_NOT_FOUND: official port list has no match");
   const url = site + "/api/feature/tools/SearchSailingRoutes";
   const response = checked(await transport(url, {
@@ -76,7 +76,7 @@ async function readRoutes(site: string, transport: Transport, originCode: string
   return { payload, url };
 }
 
-async function publicRoutes(origin: string, destination: string, date: string) {
+async function publicRoutes(origin: string[], destination: string[], date: string) {
   const failures: string[] = [];
   function record(error: unknown) {
     const message = error instanceof Error ? error.message : "MSC_QUERY_FAILED";
@@ -131,7 +131,8 @@ export const MSCProvider: ShippingProvider<MscProviderSearchInput, MscProviderRe
     const warnings = window.adjusted ? [`MSC_DATE_ADJUSTED: 官网不支持过去日期，仅实时查询 ${window.from} 起、原结束日期内的船期；过去日期未覆盖。`] : [];
     try {
       const [originMapping,destinationMapping]=await Promise.all([getCarrierPortMapping("MSC",input.originPort.id,"LOCODE"),getCarrierPortMapping("MSC",input.destinationPort.id,"LOCODE")]);
-      const {payload,url}=await publicRoutes(originMapping?.mappingValue||input.originPort.locode,destinationMapping?.mappingValue||input.destinationPort.locode,window.from);
+      const {payload,url}=await publicRoutes([input.originPort.locode, ...(originMapping ? [originMapping.mappingValue] : [])],
+        [input.destinationPort.locode, ...(destinationMapping ? [destinationMapping.mappingValue] : [])], window.from);
       if (process.env.SCHEDULE_DEBUG === "true") console.info("MSC response", JSON.stringify(payload).slice(0, 1500));
       if (!payload || typeof payload !== "object" || typeof payload.IsSuccess !== "boolean") throw new Error("MSC_RESPONSE_INVALID: empty public service response");
       if (!payload.IsSuccess || !Array.isArray(payload.Data)) {
@@ -139,10 +140,11 @@ export const MSCProvider: ShippingProvider<MscProviderSearchInput, MscProviderRe
         return { source: "MSC_LIVE", schedules: [], warnings: [noResults ? "NO_SCHEDULE_FOUND" : "MSC_RESPONSE_INVALID: official service did not return routes"], durationMs: Date.now() - started, fromCache: false };
       }
       const schedules: CoscoSchedulePreview[] = [];
+      let incomplete = false;
       for (const group of payload.Data) for (const route of group.Routes || []) {
         const departure = portClock(route.EstimatedDepartureDate), arrival = portClock(route.EstimatedArrivalDate);
         const etd = departure?.iso, eta = arrival?.iso;
-        if (!etd || !eta || !group.PortOfLoad || !group.PortOfDischarge) continue;
+        if (!etd || !eta || !group.PortOfLoad || !group.PortOfDischarge) { incomplete = true; continue; }
         if (etd.slice(0, 10) < window.from || (input.dateTo && etd.slice(0, 10) > input.dateTo.slice(0, 10))) continue;
         const legs = route.RouteScheduleLegDetails || [];
         const days = route.TotalTransitTime?.match(/^(\d+(?:\.\d+)?)\s*days?$/i)?.[1];
@@ -158,7 +160,9 @@ export const MSCProvider: ShippingProvider<MscProviderSearchInput, MscProviderRe
           cutOffTime: null, availableTime: null, rawText: JSON.stringify({ officialLegs: legs, sourceUrl: url, group: { ...group, Routes: undefined }, route }),
         });
       }
-      return { source: "MSC_LIVE", schedules, warnings: [...warnings, ...(schedules.length ? [] : ["NO_SCHEDULE_FOUND"])], durationMs: Date.now() - started, fromCache: false };
+      if (incomplete) warnings.push("MSC_PARSE_INCOMPLETE: official route is missing dates or ports");
+      else if (!schedules.length) warnings.push("NO_SCHEDULE_FOUND");
+      return { source: "MSC_LIVE", schedules, warnings, durationMs: Date.now() - started, fromCache: false };
     } catch (error) {
       return { source: "MSC_LIVE", schedules: [], warnings: [error instanceof Error ? error.message : "MSC_QUERY_FAILED"], durationMs: Date.now() - started, fromCache: false };
     }

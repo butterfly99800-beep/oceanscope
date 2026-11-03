@@ -1,3 +1,4 @@
+import { canonicalPortCode, officialPortName } from "@/features/ports/server/source-port-match";
 import { portClock } from "../port-clock";
 import type { Port } from "@prisma/client";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
@@ -68,16 +69,18 @@ async function resolveGeoId(port: MaerskProviderPort): Promise<string | null> {
   if (port.locode === "CNYTN") return "0L3DBFFJ3KZ9A";
   // 2) 兜底：Maersk 公开地点接口按城市名查询，匹配国家
   try {
-    const url = `${MAERSK_LOCATION_URL}?cityName=${encodeURIComponent(port.name)}&pageSize=25&sort=cityName&type=city`;
+    const cityName = officialPortName(port).split(",")[0].trim();
+    const url = `${MAERSK_LOCATION_URL}?cityName=${encodeURIComponent(cityName)}&pageSize=25&sort=cityName&type=city`;
     const res = await publicFetch(url, { headers: { Accept: "application/json", "Consumer-Key": MAERSK_CONSUMER_KEY } });
     if (!res.ok) return null;
     const data = (await res.json()) as GeoLocation[];
     const country = port.locode.slice(0, 2).toUpperCase();
     const candidates = data.filter(l => l.maerskGeoLocationId && l.countryCode?.toUpperCase() === country);
-    const exact = candidates.filter(l => l.unLocCode?.toUpperCase() === port.locode.toUpperCase());
+    const exact = candidates.filter(l => l.unLocCode?.toUpperCase() === canonicalPortCode(port.locode));
     if (exact.length === 1) return exact[0].maerskGeoLocationId || null;
-    const named = candidates.filter(l => l.cityName?.trim().toLowerCase() === port.name.trim().toLowerCase());
-    return !exact.length && named.length === 1 ? named[0].maerskGeoLocationId || null : null;
+    const named = (exact.length ? exact : candidates.filter(l => !l.unLocCode)).filter(
+      l => l.cityName?.trim().toLowerCase() === cityName.toLowerCase());
+    return named.length === 1 ? named[0].maerskGeoLocationId || null : null;
   } catch {
     return null;
   }

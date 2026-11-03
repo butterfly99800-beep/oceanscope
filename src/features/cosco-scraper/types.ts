@@ -45,6 +45,11 @@ export type CoscoDetectedControl = {
   visible: boolean;
 };
 
+export type AlternateLoadingOption = {
+  id: string; origin: string; loadingPort: string; departure: string;
+  vessel: string; voyage: string; destination: string; arrival: string;
+};
+
 export type InlandRailOption = {
   id: string; vessel: string; voyage: string | null; origin: string; departure: string;
   dischargePort: string; dischargeEta: string | null; facility: string; modes: string;
@@ -53,6 +58,7 @@ export type InlandRailOption = {
 
 export type CoscoSchedulePreview = {
   inlandRail?: InlandRailOption;
+  alternateLoading?: AlternateLoadingOption;
   id: string;
   carrierName: string;
   serviceName: string | null;

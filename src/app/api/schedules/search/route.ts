@@ -5,7 +5,7 @@ import { matchesSourcePort, samePortCode } from "@/features/ports/server/source-
 import { jsonError, parsePagination } from "@/features/admin/server/api-utils";
 import { acquireCoscoScraperLock, releaseCoscoScraperLock } from "@/features/cosco-scraper/server/cosco-scraper-lock";
 import { currentScheduleFormat, saveCoscoSchedules } from "@/features/cosco-scraper/server/save-cosco-schedules";
-import type { CoscoSchedulePreview, InlandRailOption } from "@/features/cosco-scraper/types";
+import type { CoscoSchedulePreview, InlandRailOption, AlternateLoadingOption } from "@/features/cosco-scraper/types";
 import { mapSchedule, scheduleInclude } from "@/features/schedules/server/schedule-mapper";
 import { COSCOProvider } from "@/features/shipping/providers/cosco/provider";
 import { OOCLProvider } from "@/features/shipping/providers/oocl/provider";
@@ -25,6 +25,7 @@ type ProviderFetchStatus = {
   resultCount: number;
   warnings: string[];
   inlandRail?: InlandRailOption[];
+  alternateLoading?: AlternateLoadingOption[];
 };
 type LiveFetchState = { done: boolean; startedAt: number; forceRefresh?: boolean; providers: ProviderFetchStatus[] };
 const liveFetchStates = new Map<string, LiveFetchState>();
@@ -166,11 +167,8 @@ function baseWhere(searchParams: URLSearchParams, originPortId?: string, destina
 }
 
 function frontendScraperMode() {
-  const mode = process.env.COSCO_FRONTEND_SCRAPER_MODE;
-  const browserFallbackEnabled = process.env.COSCO_FRONTEND_BROWSER_FALLBACK === "true";
-  if (!browserFallbackEnabled) return "api";
-  // Even legacy browser-only settings should try the working public API first.
-  return mode === "browser" || mode === "edge" || mode === "auto" ? "auto" : "api";
+  if (process.env.COSCO_FRONTEND_BROWSER_FALLBACK === "false" || process.env.COSCO_FRONTEND_SCRAPER_MODE === "api") return "api";
+  return "auto";
 }
 
 async function listPayload(where: Prisma.SailingScheduleWhereInput, searchParams: URLSearchParams) {
@@ -303,10 +301,12 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
             return;
           }
           if (provider.code === "COSCO") status.inlandRail = result.schedules.flatMap(item => item.inlandRail ? [item.inlandRail] : []);
+          if (provider.code === "OOCL") status.alternateLoading = result.schedules.flatMap(item => item.alternateLoading ? [item.alternateLoading] : []);
           const savedResults = [];
           // A new carrier may not exist yet. Serialize destination writes so LA and
           // Long Beach cannot race to create the same unique carrier code.
           for (const actualDestination of destinationPorts) savedResults.push(await saveCoscoSchedules(result.schedules.filter((item) => {
+            if (item.alternateLoading) return false;
             if (item.destinationLocode) return samePortCode(item.destinationLocode, actualDestination.locode);
             const name = item.destinationText.split(/[,;(]/)[0].trim().toLowerCase();
             return [actualDestination.name, actualDestination.nameZh, actualDestination.locode].some((value) => value?.toLowerCase() === name);
@@ -320,8 +320,8 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
           }));
           const saved = savedResults.reduce((total, item) => ({ created: total.created + item.created, updated: total.updated + item.updated, skippedItems: [...total.skippedItems, ...item.skippedItems] }), { created: 0, updated: 0, skippedItems: [] as Array<{ id: string; reason: string }> });
           status.resultCount = saved.created + saved.updated;
-          status.status = status.resultCount || status.inlandRail?.length ? "success" : "error";
-          if (!status.resultCount && !status.inlandRail?.length && !saved.skippedItems.length) status.warnings.push("RESULT_PORT_MISMATCH: returned locations do not match the requested destination");
+          status.status = status.resultCount || status.inlandRail?.length || status.alternateLoading?.length ? "success" : "error";
+          if (!status.resultCount && !status.inlandRail?.length && !status.alternateLoading?.length && !saved.skippedItems.length) status.warnings.push("RESULT_PORT_MISMATCH: returned locations do not match the requested destination");
           if (!status.resultCount && saved.skippedItems.length) {
             status.warnings = [...status.warnings, ...saved.skippedItems.slice(0, 3).map((item) => item.reason)];
           }

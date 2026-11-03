@@ -32,14 +32,15 @@ function createInitialCriteria(): ScheduleSearchCriteria {
 const initialFilters: ScheduleFilterState = { carriers: [], direct: "all", stopCount: "all", departureFrom: "", transitDays: "all", serviceName: "", vesselName: "", terminal: "" };
 
 type PortListResponse = { data: PortOption[] };
-import type { InlandRailOption } from "@/features/cosco-scraper/types";
+import type { InlandRailOption, AlternateLoadingOption } from "@/features/cosco-scraper/types";
 
-type ProviderFetchStatus = { inlandRail?: InlandRailOption[]; code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
+type ProviderFetchStatus = { alternateLoading?: AlternateLoadingOption[]; inlandRail?: InlandRailOption[]; code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
 type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: number }; done: boolean; providers?: ProviderFetchStatus[] };
 
 const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
+  if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");
   if (provider.inlandRail?.length) return [provider.resultCount ? provider.resultCount + " 条完整船期" : "", provider.inlandRail.length + " 条含铁路段"].filter(Boolean).join("，");
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条`;
   if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
@@ -51,7 +52,7 @@ function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.warnings.some((warning) => /ACCESS_BLOCKED/.test(warning))) return "官网限制访问";
   if (provider.warnings.some((warning) => /RATE_LIMITED/.test(warning))) return "官网请求限流";
   if (provider.status === "fetching" || provider.status === "pending") return "查询中";
-  if (provider.status === "no_results") return "该入口未返回船期";
+  if (provider.status === "no_results") return "未查到船期";
   if (provider.warnings.some((warning) => /CAPTCHA_REQUIRED|VERIFICATION_REQUIRED/i.test(warning))) return "需要官网验证";
   if (provider.warnings.some((warning) => /TIMEOUT|Timeout/i.test(warning))) return "官网响应超时";
   if (provider.status === "unavailable") return "官网暂不可用";
@@ -338,6 +339,13 @@ export function SchedulesShell() {
                     </span>
                   ))}
                 </div>
+                {providerStatuses.flatMap(provider => provider.alternateLoading?.length ? <details key={provider.code} className="mt-3">
+                  <summary>OOCL 异港装船方案（离港日期为实际装船港时间）</summary>
+                  <div className="overflow-x-auto"><table className="mt-2 w-full text-left text-sm">
+                    <thead><tr>{["查询起运地","实际装船港","离港日期","首程船名 / 航次","最终目的地","预计到达"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+                    <tbody>{provider.alternateLoading.map(row => <tr key={row.id}><td>{row.origin}</td><td>{row.loadingPort}</td>
+                      <td>{row.departure.slice(0,10)}</td><td>{row.vessel} {row.voyage}</td><td>{row.destination}</td><td>{row.arrival.slice(0,10)}</td></tr>)}</tbody>
+                  </table></div></details> : [])}
                 {providerStatuses.flatMap(provider => provider.inlandRail?.length ? <details key={provider.code} className="mt-3">
                   <summary>COSCO 含铁路段方案（目的地到达时间未公布）</summary>
                   <div className="overflow-x-auto"><table className="mt-2 w-full text-left text-sm">

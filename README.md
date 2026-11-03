@@ -141,8 +141,8 @@ npm run dev
 | `COSCO_SCRAPER_HEADLESS` | `true` | 浏览器模式是否无头 |
 | `COSCO_SCHEDULE_CACHE_MINUTES` | `360` | 船期缓存时长（分钟） |
 | `COSCO_SCHEDULE_FETCH_COOLDOWN_SECONDS` | `120` | 相同查询抓取冷却时间（秒） |
-| `COSCO_FRONTEND_SCRAPER_MODE` | `api` | 前端抓取模式：`api` / `auto` / `browser` |
-| `COSCO_FRONTEND_BROWSER_FALLBACK` | `false` | API 模式失败时是否自动降级到浏览器 |
+| `COSCO_FRONTEND_SCRAPER_MODE` | `auto` | 前端抓取模式：`api` / `auto` / `browser` |
+| `COSCO_FRONTEND_BROWSER_FALLBACK` | `true` | API 模式失败时是否自动降级到浏览器 |
 | `SHOW_SEED_SCHEDULES` | `false` | 是否展示种子船期数据 |
 
 ## 种子账号
