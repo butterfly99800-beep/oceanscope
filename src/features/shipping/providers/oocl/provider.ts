@@ -7,7 +7,7 @@ import type { ShippingProvider } from "@/features/shipping/providers/types";
 import { canonicalPortCode, matchesSourcePort } from "@/features/ports/server/source-port-match";
 import { queryOoclHttp, MOBILE_UA, OOCL_MOBILE_URL, ooclCitySelector } from "./http";
 
-type OoclProviderPort = Pick<Port, "id" | "name" | "locode">;
+type OoclProviderPort = Pick<Port, "name" | "locode"> & { id?: string };
 
 export type OoclProviderSearchInput = {
   originPort: OoclProviderPort;
@@ -29,7 +29,7 @@ const months: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4,
 
 
 async function toOoclPortValue(port: OoclProviderPort) {
-  const search = await getCarrierPortMapping("OOCL", port.id, "SEARCH_NAME");
+  const search = port.id ? await getCarrierPortMapping("OOCL", port.id, "SEARCH_NAME") : null;
   const keyword = search?.mappingValue || port.name || port.locode;
   return keyword.split(",")[0].trim();
 }

@@ -1,0 +1,38 @@
+name: OOCL public schedule probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/oocl-public-probe.yml
+      - scripts/check-oocl-public.cjs
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        destination: [USLAX, USLGB]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: mysql://unused:unused@localhost:1/unused
+      - run: |
+          if ! command -v pdftotext >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y poppler-utils
+          fi
+          command -v google-chrome
+      - name: Query official schedules
+        env:
+          DESTINATION: ${{ matrix.destination }}
+          SCHEDULE_DEBUG: 'true'
+          SCHEDULE_BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
+        run: node scripts/check-oocl-public.cjs "$DESTINATION"
