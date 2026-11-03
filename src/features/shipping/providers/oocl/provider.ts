@@ -163,6 +163,7 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
         return { source: "OOCL_LIVE", schedules: [], warnings: [`OOCL_PUBLIC_PAGE_FAILED: official mobile entry HTTP ${entryResponse.status()}`], durationMs: Date.now() - started, fromCache: false };
       }
       await page.waitForTimeout(1500);
+      if (/\[QF17\]/i.test(await page.locator("body").innerText())) throw new Error("OOCL_AUTH_REQUIRED: QF17");
       if (await detectHumanVerification(page)) {
         return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL_CAPTCHA_REQUIRED"], durationMs: Date.now() - started, fromCache: false };
       }
@@ -264,7 +265,7 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
       if (process.env.SCHEDULE_DEBUG === "true") console.info("OOCL HTTP fallback reason", httpFailure);
     }
     const destination = input.destinationPort.locode;
-    if (canonicalPortCode(input.originPort.locode) === "CNSHA" && (destination === "USLAX" || destination === "USLGB")) {
+    if (canonicalPortCode(input.originPort.locode) === "CNSHA" && (destination === "USLAX" || destination === "USLGB" || destination === "DEHAM")) {
       const to = input.dateTo?.slice(0,10) || new Date(new Date(input.departureDate).getTime()+28*86400000).toISOString().slice(0,10);
       const published = await queryShanghaiLoops(destination, input.departureDate.slice(0,10), to);
       if (published.schedules.length) return { source:"OOCL_LIVE", ...published, durationMs:Date.now()-started, fromCache:false };

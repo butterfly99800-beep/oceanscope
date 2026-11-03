@@ -43,6 +43,7 @@ function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.warnings.some(w => /INLAND_UNSUPPORTED/.test(w))) return "内陆段暂未支持";
   if (provider.warnings.some(w => /PORT_NOT_FOUND|Geo ID could not be resolved/.test(w))) return "公开入口未匹配到地点";
   if (provider.warnings.some(w => /RESULT_PORT_MISMATCH|Official result port does not match/.test(w))) return "官网返回其他港口";
+  if (provider.warnings.some(w => /OOCL_AUTH_REQUIRED/.test(w))) return "官网要求登录后重试";
   if (provider.warnings.some(w => /PARSE_INCOMPLETE|RESPONSE_INVALID/.test(w))) return "官网数据未能完整解析";
   if (provider.warnings.some((warning) => /ACCESS_BLOCKED/.test(warning))) return "官网限制访问";
   if (provider.warnings.some((warning) => /RATE_LIMITED/.test(warning))) return "官网请求限流";

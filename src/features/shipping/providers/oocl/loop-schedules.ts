@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, writeFile, unlink, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -5,7 +6,10 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 
-const loops = ["PCC1", "PCN1", "PCN3", "PCS1"];
+const pacificLoops = ["PCC1", "PCN1", "PCN3", "PCS1"];
+const europeLoops = ["LL1", "LL2", "LL3", "LL4", "LL5", "LL6", "LL7"];
+const destinationNames = { USLAX: "Los Angeles", USLGB: "Long Beach", DEHAM: "Hamburg" } as const;
+function documentUrl(code: string) { return root + code + (europeLoops.includes(code) ? "%20" : "") + "_LT.pdf"; }
 const root = "https://www.oocl.com/SiteCollectionDocuments/OOCL/eServices/Sailing%20Schedule%20by%20Service/";
 const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 const pending = new Map<string, Promise<string>>();
@@ -13,7 +17,7 @@ function documentText(code: string) {
   const active = pending.get(code);
   if (active) return active;
   const task = (async () => {
-    const url = root + code + "_LT.pdf";
+    const url = documentUrl(code);
     const r = await fetch(url, {cache:"no-store", signal:AbortSignal.timeout(15000)});
     if (!r.ok) throw new Error(`OOCL_PDF_HTTP_${r.status}`);
     const pdf = Buffer.from(await r.arrayBuffer());
@@ -23,25 +27,39 @@ function documentText(code: string) {
     try {
       await writeFile(file, pdf);
       return await new Promise<string>((resolve,reject) => {
-        execFile(process.env.OOCL_PDFTOTEXT_PATH || "pdftotext", ["-raw",file,"-"], {encoding:"utf8",timeout:10000,maxBuffer:2000000}, (error,out) => error ? reject(new Error("OOCL_PDF_READER_FAILED: check pdftotext")) : resolve(out));
+        execFile(pdfReader(), ["-raw",file,"-"], {encoding:"utf8",timeout:10000,maxBuffer:2000000}, (error,out) => error ? reject(new Error("OOCL_PDF_READER_FAILED: check pdftotext")) : resolve(out));
       });
     } finally { await unlink(file).catch(()=>undefined); await rmdir(dir).catch(()=>undefined); }
   })().finally(()=>pending.delete(code));
   pending.set(code,task);
   return task;
 }
+function pdfReader() {
+  if (process.env.OOCL_PDFTOTEXT_PATH) return process.env.OOCL_PDFTOTEXT_PATH;
+  if (process.platform === "win32") {
+    for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+      if (!path.isAbsolute(dir) || path.basename(dir).toLowerCase() !== "cmd") continue;
+      const candidate = path.resolve(dir, "../mingw64/bin/pdftotext.exe");
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return "pdftotext";
+}
 type Call = {port:string;arrival:string;departure:string;raw:string};
 function parseDate(day:number, month:number, reference:Date) {
   const candidates = [-1,0,1].map(offset=>new Date(Date.UTC(reference.getUTCFullYear()+offset,month,day,12))).filter(d=>d.getUTCDate()===day && Math.abs(+d-+reference)<180*86400000);
   return candidates.length===1 ? candidates[0].toISOString().slice(0,10) : null;
 }
-export function parseLoop(text:string, loop:string, destination:"USLAX"|"USLGB", from:string,to:string) {
+export function parseLoop(text:string, loop:string, destination:keyof typeof destinationNames, from:string,to:string) {
   const stamp = text.match(/Last Update Date:\s*(\d{2})-([A-Za-z]{3})-(\d{4})/);
   if (!stamp || months.indexOf(stamp[2])<0) throw new Error("OOCL_PDF_RESPONSE_INVALID: publication date missing");
   const reference = new Date(Date.UTC(+stamp[3],months.indexOf(stamp[2]),+stamp[1],12));
   const rows:CoscoSchedulePreview[]=[];
-  const portName=destination==='USLAX'?'Los Angeles':'Long Beach';
-  for(const block of text.split(/^Vessel Name /m).slice(1)) {
+  const portName=destinationNames[destination];
+  // PDF text extraction may wrap a single header row across several lines.
+  const normalized = text.replace(/^Vessel Name [^\f]*?(?=^Vessel\/Voyage )/gm, header =>
+    /Arr--Dep|Copyright|Last Update Date/.test(header) ? header : header.trim().replace(/\s+/g, " ") + "\n");
+  for(const block of normalized.split(/^Vessel Name /m).slice(1)) {
     const [header,voyages,labels,...lines]=block.split(/\r?\n/);
     const names=header.split(/\s+Vessel Name\s+/).map(x=>x.trim());
     const vv=voyages?.split(/Vessel\/Voyage\s+/).slice(1).map(x=>x.trim());
@@ -60,14 +78,15 @@ export function parseLoop(text:string, loop:string, destination:"USLAX"|"USLGB",
     columns.forEach((calls,i)=>{if(/TO BE ADVISED|TBA|TBD/i.test(names[i]) || !vv[i])return;
       for(let j=0;j<calls.length;j++){const a=calls[j];if(a.port!=='Shanghai'||a.departure<from||a.departure>to)continue;
         const onward=calls.slice(j+1);const nextShanghai=onward.findIndex(x=>!x.port||x.port==='Shanghai');const b=(nextShanghai>=0?onward.slice(0,nextShanghai):onward).find(x=>x.port===portName);if(!b||b.arrival<=a.departure)continue;
-        const raw=`POL:\t${a.port}\nFinal Destination Hub:\t${b.port}\nVessel/Voyage:\t${vv[i]}\nVessel Name:\t${names[i]}\n${loop}\n${a.raw}\n${b.raw}\nSource: ${root}${loop}_LT.pdf\n${stamp[0]}`;
+        const raw=`POL:\t${a.port}\nFinal Destination Hub:\t${b.port}\nVessel/Voyage:\t${vv[i]}\nVessel Name:\t${names[i]}\n${loop}\n${a.raw}\n${b.raw}\nSource: ${documentUrl(loop)}\n${stamp[0]}`;
         rows.push({id:'oocl-loop-'+createHash('sha256').update([loop,vv[i],a.departure,destination].join('|')).digest('hex'),carrierName:'OOCL',serviceName:loop,routeName:null,vesselName:names[i],voyageNumber:vv[i],originText:a.port,destinationText:b.port,originLocode:'CNSHA',destinationLocode:destination,etd:a.departure+'T12:00:00.000Z',eta:b.arrival+'T12:00:00.000Z',etdTimeKnown:false,etaTimeKnown:false,transitDays:null,direct:null,stopCount:null,transitPorts:[],rawText:raw});
       }
     });
   }
   return rows;
 }
-export async function queryShanghaiLoops(destination:"USLAX"|"USLGB",from:string,to:string) {
+export async function queryShanghaiLoops(destination:keyof typeof destinationNames,from:string,to:string) {
+  const loops = destination === "DEHAM" ? europeLoops : pacificLoops;
   const results=await Promise.allSettled(loops.map(async loop=>parseLoop(await documentText(loop),loop,destination,from,to)));
   return {schedules:results.flatMap(r=>r.status==='fulfilled'?r.value:[]),warnings:results.flatMap(r=>r.status==='rejected'?[String(r.reason)]:[])};
 }

@@ -7,6 +7,7 @@ export const MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)
 export function readForm(html: string, pageUrl: string) {
   const $ = load(html);
   const form = $("form#form");
+  if (!form.length && /\[QF17\]/i.test($("body").text())) throw new Error("OOCL_AUTH_REQUIRED: QF17");
   if (!form.length) throw new Error("OOCL_HTTP_RESPONSE_INVALID: public JSF form missing");
   const url = new URL(form.attr("action") || pageUrl, pageUrl);
   if (url.origin !== new URL(OOCL_MOBILE_URL).origin) throw new Error("OOCL_HTTP_RESPONSE_INVALID: unexpected form origin");
