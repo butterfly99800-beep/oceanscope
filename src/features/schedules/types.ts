@@ -84,6 +84,7 @@ export interface SailingSchedule {
   terminal: string | null;
   destinationTerminal: string | null;
   cutOffTime: string | null;
+  siCutOffTime?: string | null;
   availableTime: string | null;
   lastUpdated: string;
   rawSourceAvailable?: boolean;

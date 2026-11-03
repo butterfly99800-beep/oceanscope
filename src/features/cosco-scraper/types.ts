@@ -66,6 +66,7 @@ export type CoscoSchedulePreview = {
   transitPorts: string[];
   cargoNature?: string | null;
   cutOffTime?: string | null;
+  siCutOffTime?: string | null;
   availableTime?: string | null;
   originFacilityName?: string | null;
   destinationFacilityName?: string | null;

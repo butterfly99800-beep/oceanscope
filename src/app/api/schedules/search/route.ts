@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { matchesSourcePort, samePortCode } from "@/features/ports/server/source-port-match";
 import { jsonError, parsePagination } from "@/features/admin/server/api-utils";
 import { acquireCoscoScraperLock, releaseCoscoScraperLock } from "@/features/cosco-scraper/server/cosco-scraper-lock";
-import { saveCoscoSchedules } from "@/features/cosco-scraper/server/save-cosco-schedules";
+import { currentScheduleFormat, saveCoscoSchedules } from "@/features/cosco-scraper/server/save-cosco-schedules";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { mapSchedule, scheduleInclude } from "@/features/schedules/server/schedule-mapper";
 import { COSCOProvider } from "@/features/shipping/providers/cosco/provider";
@@ -203,8 +203,9 @@ function latestScheduleSnapshots<T extends { id: string; source: ScheduleDataSou
   return rows.filter((row) => latest.get(identity(row))?.id === row.id);
 }
 
-function sourceMatchesPorts(row: { source: ScheduleDataSource; rawSourceData: Prisma.JsonValue | null; originPort: SourcePort; destinationPort: SourcePort }) {
+function sourceMatchesPorts(row: { source: ScheduleDataSource; sourceReference: string | null; rawSourceData: Prisma.JsonValue | null; originPort: SourcePort; destinationPort: SourcePort }) {
   if (row.source === "MANUAL" || row.source === "SEED") return true;
+  if (!currentScheduleFormat(row.source, row.sourceReference)) return false;
   if (!row.rawSourceData) return false;
   const text = typeof row.rawSourceData === "string" ? row.rawSourceData : JSON.stringify(row.rawSourceData);
   const matches = matchesSourcePort;

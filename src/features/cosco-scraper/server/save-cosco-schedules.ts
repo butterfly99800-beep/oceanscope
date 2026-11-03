@@ -8,6 +8,13 @@ export type SaveCoscoResult = { created: number; updated: number; skipped: numbe
 
 type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY";
 
+// Old rows remain stored, but must be refreshed once before being reused as new-format data.
+const refreshedSources = new Set<string>(["MSC_LIVE_QUERY", "MAERSK_LIVE_QUERY", "HAPAG_LIVE_QUERY", "CMA_LIVE_QUERY"]);
+const formatPrefix = "port-v2:";
+export function currentScheduleFormat(source: string, reference: string | null) {
+  return !refreshedSources.has(source) || Boolean(reference?.startsWith(formatPrefix));
+}
+
 type SaveOptions = { mode?: "skipDuplicates" | "updateDuplicates"; originPort?: Port; destinationPort?: Port; source?: LiveScheduleSource; carrierCode?: string; carrierName?: string };
 
 function parseIso(value: string | null | undefined) {
@@ -65,7 +72,7 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     originTerminal: item.originFacilityName ?? null,
     destinationTerminal: item.destinationFacilityName ?? null,
     cyOpenTime: null,
-    siCutOffTime: null,
+    siCutOffTime: parseIso(item.siCutOffTime),
     vgmCutOffTime: null,
     customsCutOffTime: parseIso(item.cutOffTime),
     estimatedBerthingTime: parseIso(item.availableTime),
@@ -76,7 +83,7 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     source,
     fetchedAt: new Date(),
     rawSourceData: item.rawText,
-    sourceReference: item.id.slice(0, 160),
+    sourceReference: ((refreshedSources.has(source) ? formatPrefix : "") + item.id).slice(0, 160),
     routingKey: item.rawText.startsWith('{"officialLegs":') ? createHash("sha256").update(item.id).digest("hex") : "",
   };
 }

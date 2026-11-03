@@ -1,3 +1,4 @@
+import { portClock } from "../port-clock";
 import type { Port } from "@prisma/client";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
@@ -70,8 +71,7 @@ function isoAt(source: JsonObject | null, keys: string[]): string | null {
   const value = stringAt(source, keys);
   if (!value) return null;
   if (!hasTime(value)) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return portClock(value)?.iso ?? null;
 }
 
 function hasTime(value: string | null) {
@@ -108,10 +108,8 @@ function mapRoute(item: unknown, index: number): CoscoSchedulePreview | null {
     || stringAt(first, ["etd", "estimatedTimeOfDeparture", "departureDateTime", "departureTime"]);
   const etaRaw = stringAt(route, ["eta", "estimatedTimeOfArrival", "arrivalDateTime", "arrivalTime", "placeOfDeliveryDateTime"])
     || stringAt(last, ["eta", "estimatedTimeOfArrival", "arrivalDateTime", "arrivalTime"]);
-  const etdDate = etdRaw ? new Date(hasTime(etdRaw) ? etdRaw : `${etdRaw.slice(0, 10)}T12:00:00Z`) : null;
-  const etaDate = etaRaw ? new Date(hasTime(etaRaw) ? etaRaw : `${etaRaw.slice(0, 10)}T12:00:00Z`) : null;
-  const etd = etdDate && !Number.isNaN(etdDate.getTime()) ? etdDate.toISOString() : null;
-  const eta = etaDate && !Number.isNaN(etaDate.getTime()) ? etaDate.toISOString() : null;
+  const etd = portClock(etdRaw)?.iso;
+  const eta = portClock(etaRaw)?.iso;
   if (!etd || !eta) return null;
 
   const explicitStops = numberAt(route, ["numberOfTransshipments", "transshipmentCount", "stopCount"]);
@@ -136,8 +134,8 @@ function mapRoute(item: unknown, index: number): CoscoSchedulePreview | null {
     destinationLocode: locationCode(valueAt(route, ["placeOfDelivery"])) || locationCode(valueAt(last, ["arrivalLocation"])),
     etd,
     eta,
-    etdTimeKnown: hasTime(etdRaw),
-    etaTimeKnown: hasTime(etaRaw),
+    etdTimeKnown: portClock(etdRaw)?.timeKnown,
+    etaTimeKnown: portClock(etaRaw)?.timeKnown,
     transitDays: numberAt(route, ["transitTimeDays", "transitTimeInDays", "transitDays", "durationDays"]),
     direct: explicitDirect,
     stopCount: explicitStops,

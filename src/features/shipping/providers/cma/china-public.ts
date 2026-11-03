@@ -1,3 +1,4 @@
+import { cmaSiDeadline } from "../port-clock";
 import { chromium, request } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import type { CmaProviderSearchInput, CmaProviderResult } from "./provider";
@@ -169,7 +170,7 @@ export async function searchChinaPublic(input: CmaProviderSearchInput): Promise<
           originLocode: String(row.PlaceCode), destinationLocode: input.destinationPort.locode,
           etd: `${etd}T12:00:00.000Z`, eta: `${destination.ETA}T12:00:00.000Z`, etdTimeKnown: false, etaTimeKnown: false,
           transitDays: null, direct: null, stopCount: null, transitPorts: destination.VIA ? [destination.VIA] : [],
-          cargoNature: null, cutOffTime: null, availableTime: null, originFacilityName: text(row.TerminalEngName) || text(row.TerminalName), destinationFacilityName: null,
+          cargoNature: null, cutOffTime: null, siCutOffTime: cmaSiDeadline(row.SiCutOff), availableTime: null, originFacilityName: text(row.TerminalEngName) || text(row.TerminalName), destinationFacilityName: null,
           outboundHaulage: null, inboundHaulage: null,
           rawText: JSON.stringify({ sourceUrl: ENTRY, trade: chinaTrade(input.destinationPort.locode), fetchedAt: new Date().toISOString(), row, destination }),
         });

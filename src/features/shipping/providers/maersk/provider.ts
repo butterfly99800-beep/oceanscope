@@ -1,3 +1,4 @@
+import { portClock } from "../port-clock";
 import type { Port } from "@prisma/client";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -92,11 +93,6 @@ function explicitBoolean(value: unknown): boolean | null {
   return null;
 }
 
-function toIso(value: string | undefined | null): string | null {
-  if (!value) return null;
-  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value.slice(0, 10)}T12:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
 
 function buildBody(geoFrom: string, geoTo: string, earliestDate: string, latestDate: string) {
   return {
@@ -142,8 +138,8 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
     const vessel = object(ocean?.vessel);
     const depSvc = object(oceanStart?.departureService);
     const arrSvc = object(end.arrivalService);
-    const etd = toIso(stringValue(start.estimatedTimeOfDeparture));
-    const eta = toIso(stringValue(end.estimatedTimeOfArrival));
+    const etd = portClock(start.estimatedTimeOfDeparture);
+    const eta = portClock(end.estimatedTimeOfArrival);
     if (!etd || !eta) return;
     const transitPorts: string[] = [];
     for (let k = 1; k < legs.length; k++) {
@@ -155,7 +151,7 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
       if (mid) transitPorts.push(mid);
     }
     out.push({
-      id: `maersk-${i}-${etd}`,
+      id: `maersk-${i}-${etd.iso}`,
       carrierName: "MAERSK",
       serviceName: stringValue(depSvc?.serviceName) || stringValue(arrSvc?.serviceName),
       routeName: stringValue(depSvc?.serviceCode),
@@ -165,10 +161,10 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
       destinationText,
       originLocode,
       destinationLocode,
-      etd,
-      eta,
-      etdTimeKnown: /(?:Z|[+-]\d{2}:?\d{2})$/.test(stringValue(start.estimatedTimeOfDeparture) || ""),
-      etaTimeKnown: /(?:Z|[+-]\d{2}:?\d{2})$/.test(stringValue(end.estimatedTimeOfArrival) || ""),
+      etd: etd.iso,
+      eta: eta.iso,
+      etdTimeKnown: etd.timeKnown,
+      etaTimeKnown: eta.timeKnown,
       transitDays: parseIsoDuration(stringValue(routing.estimatedTransitTime)),
       direct: explicitBoolean(routing.isDirect) ?? explicitBoolean(routing.direct),
       stopCount: typeof routing.numberOfTransshipments === "number" ? routing.numberOfTransshipments : null,

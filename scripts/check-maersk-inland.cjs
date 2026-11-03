@@ -4,7 +4,13 @@ const path = require('node:path');
 const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, '../src/features/shipping/providers/maersk/provider.ts'), 'utf8');
 const exportsObject = {};
-new Function('exports', 'require', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(exportsObject, () => ({}));
+new Function('exports', 'require', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(exportsObject, name => {
+  if (name !== '../port-clock') return {};
+  const clock = {};
+  const text = fs.readFileSync(path.join(__dirname, '../src/features/shipping/providers/port-clock.ts'), 'utf8');
+  new Function('exports', ts.transpileModule(text, {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(clock);
+  return clock;
+});
 const ocean = { carriageType: 'OCEAN', vessel: { vesselName: 'SANTA BARBARA' }, vesselPortCallStart: { estimatedTimeOfDeparture: '2026-11-07T01:00:00', departureVoyageNumber: '644E', departureService: { serviceName: 'TP5' } }, vesselPortCallEnd: { estimatedTimeOfArrival: '2026-11-29T08:00:00' } };
 const rail = { carriageType: 'RAIL', railScheduleLocationStart: { estimatedTimeOfDeparture: '2026-12-04T20:00:00' }, railScheduleLocationEnd: { estimatedTimeOfArrival: '2026-12-10T06:00:00', facility: { facilityCode: 'CATORVA' } } };
 const parse = carriages => exportsObject.parseSchedules({ routings: [{ routingLegs: carriages.map(carriage => ({ carriage })), estimatedTransitTime: 'P33DT18H' }] }, 'Shanghai', 'Toronto', 'CNSHA', 'CATOR');

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { portClock } from "../port-clock";
 import { launchPublicBrowser } from "../public-browser";
 import type { Port } from "@prisma/client";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -10,7 +12,11 @@ type MscProviderPort = Pick<Port, "id" | "name" | "locode">;
 export type MscProviderSearchInput = { originPort: MscProviderPort; destinationPort: MscProviderPort; departureDate: string; dateTo?: string };
 export type MscProviderResult = { source: "MSC_LIVE"; schedules: CoscoSchedulePreview[]; warnings: string[]; durationMs: number; fromCache: boolean };
 type MscPort = { PortId: number; LocationCode: string; LocationName: string };
-type MscLeg = { DepartureEquipmentHandlingFacilityName?: string; ArrivalEquipmentHandlingFacilityName?: string };
+type MscLeg = {
+  DeparturePortUNCode?: string; ArrivalPortUNCode?: string; DepartureVoyageNo?: string;
+  EstimatedDepartureTime?: string; EstimatedArrivalTime?: string;
+  DepartureEquipmentHandlingFacilityName?: string; ArrivalEquipmentHandlingFacilityName?: string;
+};
 type MscRoute = {
   EstimatedDepartureDate?: string; EstimatedArrivalDate?: string; VesselName?: string; DepartureVoyageNo?: string;
   TotalTransitTime?: string; RouteScheduleLegDetails?: MscLeg[];
@@ -106,10 +112,14 @@ async function publicRoutes(origin: string, destination: string, date: string) {
   throw new Error(failures.join("; "));
 }
 
-function iso(value?: string) {
-  if (!value) return null;
-  const date = new Date(`${value.slice(0, 10)}T12:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+function routeReference(group: MscGroup, route: MscRoute) {
+  const legs = route.RouteScheduleLegDetails?.map(leg => [
+    leg.DeparturePortUNCode, leg.ArrivalPortUNCode, leg.DepartureVoyageNo, leg.EstimatedDepartureTime,
+    leg.EstimatedArrivalTime, leg.DepartureEquipmentHandlingFacilityName, leg.ArrivalEquipmentHandlingFacilityName,
+  ]);
+  const identity = [group.PortOfLoadUnCode, group.PortOfDischargeUnCode, group.Key?.MaritimeServiceName,
+    route.VesselName, route.DepartureVoyageNo, route.EstimatedDepartureDate, route.EstimatedArrivalDate, legs];
+  return "msc-" + createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 
 export const MSCProvider: ShippingProvider<MscProviderSearchInput, MscProviderResult> = {
@@ -130,21 +140,22 @@ export const MSCProvider: ShippingProvider<MscProviderSearchInput, MscProviderRe
       }
       const schedules: CoscoSchedulePreview[] = [];
       for (const group of payload.Data) for (const route of group.Routes || []) {
-        const etd = iso(route.EstimatedDepartureDate); const eta = iso(route.EstimatedArrivalDate);
+        const departure = portClock(route.EstimatedDepartureDate), arrival = portClock(route.EstimatedArrivalDate);
+        const etd = departure?.iso, eta = arrival?.iso;
         if (!etd || !eta || !group.PortOfLoad || !group.PortOfDischarge) continue;
         if (etd.slice(0, 10) < window.from || (input.dateTo && etd.slice(0, 10) > input.dateTo.slice(0, 10))) continue;
         const legs = route.RouteScheduleLegDetails || [];
         const days = route.TotalTransitTime?.match(/^(\d+(?:\.\d+)?)\s*days?$/i)?.[1];
         schedules.push({
-          id: `msc-${group.PortOfLoadUnCode}-${group.PortOfDischargeUnCode}-${route.DepartureVoyageNo || schedules.length}-${etd}`, carrierName: "MSC", serviceName: group.Key?.MaritimeServiceName || null, routeName: null,
+          id: routeReference(group, route), carrierName: "MSC", serviceName: group.Key?.MaritimeServiceName || null, routeName: null,
           vesselName: route.VesselName || null, voyageNumber: route.DepartureVoyageNo || null,
           originText: group.PortOfLoad, destinationText: group.PortOfDischarge,
           originLocode: group.PortOfLoadUnCode || null, destinationLocode: group.PortOfDischargeUnCode || null,
-          etd, eta, etdTimeKnown: false, etaTimeKnown: false, transitDays: days ? Number(days) : null,
+          etd, eta, etdTimeKnown: departure.timeKnown, etaTimeKnown: arrival.timeKnown, transitDays: days ? Number(days) : null,
           direct: group.IsDirectRoute ?? group.Key?.IsDirectRoute ?? null, stopCount: null, transitPorts: [],
           originFacilityName: legs[0]?.DepartureEquipmentHandlingFacilityName || null,
           destinationFacilityName: legs.at(-1)?.ArrivalEquipmentHandlingFacilityName || null,
-          cutOffTime: null, availableTime: null, rawText: JSON.stringify({ sourceUrl: url, group: { ...group, Routes: undefined }, route }),
+          cutOffTime: null, availableTime: null, rawText: JSON.stringify({ officialLegs: legs, sourceUrl: url, group: { ...group, Routes: undefined }, route }),
         });
       }
       return { source: "MSC_LIVE", schedules, warnings: [...warnings, ...(schedules.length ? [] : ["NO_SCHEDULE_FOUND"])], durationMs: Date.now() - started, fromCache: false };

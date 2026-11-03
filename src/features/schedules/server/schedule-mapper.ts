@@ -1,3 +1,4 @@
+import { cmaSiDeadline } from "@/features/shipping/providers/port-clock";
 import type { Prisma } from "@prisma/client";
 import type { SailingSchedule } from "@/features/schedules/types";
 
@@ -44,9 +45,11 @@ function displaySourcedTime(value: Date | null | undefined, fallbackValue: Date,
 
 export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
   let carrierLabel = schedule.carrier.name;
+  let siCutOffTime = schedule.siCutOffTime?.toISOString() ?? null;
   if (schedule.source === "CMA_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
     try {
-      const evidence = JSON.parse(schedule.rawSourceData) as { trade?: string };
+      const evidence = JSON.parse(schedule.rawSourceData) as { trade?: string; row?: { SiCutOff?: unknown } };
+      siCutOffTime ??= cmaSiDeadline(evidence.row?.SiCutOff);
       if (evidence.trade === "ANL") carrierLabel = "CMA CGM / ANL（官网分类）";
     } catch { /* Existing page-text evidence has no structured trade classification. */ }
   }
@@ -85,6 +88,7 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
     cargoNature: displayValue(schedule.frequency),
     terminal: displayTerminal(schedule.originTerminal, schedule.originPort.name, schedule.source),
     destinationTerminal: displayTerminal(schedule.destinationTerminal, schedule.destinationPort.name, schedule.source),
+    siCutOffTime,
     cutOffTime: displaySourcedTime(schedule.customsCutOffTime, schedule.etd, schedule.source),
     availableTime: displaySourcedTime(schedule.estimatedBerthingTime, schedule.etd, schedule.source),
     lastUpdated: iso(schedule.fetchedAt ?? schedule.lastUpdatedAt),

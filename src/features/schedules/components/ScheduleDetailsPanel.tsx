@@ -49,6 +49,7 @@ export function ScheduleDetailsPanel({ schedule, favorite, comparing, onClose, o
         </Section>
         <Section title="关键时间节点">
           {[
+            { label: "SI 截单时间", value: schedule.siCutOffTime, timeKnown: true },
             { label: "截载时间", value: schedule.cutOffTime, timeKnown: schedule.source !== "OOCL_LIVE_QUERY" },
             { label: "ETD", value: schedule.etd, timeKnown: schedule.etdTimeKnown !== false },
             { label: "ETA", value: schedule.eta, timeKnown: schedule.etaTimeKnown !== false },
