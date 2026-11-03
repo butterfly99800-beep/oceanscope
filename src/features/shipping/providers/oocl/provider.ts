@@ -254,11 +254,12 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
         .filter((item): item is CoscoSchedulePreview => Boolean(item
           && matchesSourcePort(item.originText, { ...input.originPort, nameZh: null })
           && matchesSourcePort(item.destinationText, { ...input.destinationPort, nameZh: null })));
-      if (schedules.length || result.warnings.includes("NO_SCHEDULE_FOUND")) {
+      if (schedules.length) {
         if (process.env.SCHEDULE_DEBUG === "true") console.info("OOCL transport", "http-only");
         return { source: "OOCL_LIVE", schedules, warnings: result.warnings, durationMs: Date.now() - started, fromCache: false };
       }
-      throw new Error("OOCL_HTTP_PARSE_INCOMPLETE");
+      if (result.warnings.includes("NO_SCHEDULE_FOUND")) httpFailure = "NO_SCHEDULE_FOUND";
+      else throw new Error("OOCL_HTTP_PARSE_INCOMPLETE");
     } catch (error) {
       httpFailure = error instanceof Error ? error.message.split("\n")[0] : "OOCL_HTTP_FAILED";
       if (/RATE_LIMITED|HTTP 429/.test(httpFailure)) return { source: "OOCL_LIVE", schedules: [], warnings: [httpFailure], durationMs: Date.now() - started, fromCache: false };
@@ -270,7 +271,10 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
         { ...input.originPort, name: officialPortName(input.originPort), locode: canonicalPortCode(input.originPort.locode) },
         { ...input.destinationPort, name: officialPortName(input.destinationPort), locode: canonicalPortCode(input.destinationPort.locode) },
         input.departureDate.slice(0,10), to);
-      if (published.schedules.length) return { source:"OOCL_LIVE", ...published, durationMs:Date.now()-started, fromCache:false };
+      if (published.schedules.length) return { source:"OOCL_LIVE", ...published,
+        warnings: ["OOCL_PDF_SOURCE: published service loops", ...published.warnings], durationMs:Date.now()-started, fromCache:false };
+      if (httpFailure === "NO_SCHEDULE_FOUND") return { source: "OOCL_LIVE", schedules: [],
+        warnings: [httpFailure, ...published.warnings], durationMs: Date.now() - started, fromCache: false };
       if (published.warnings.length) httpFailure += "; " + published.warnings.join(", ");
     }
     const first = await OOCLSingleAttempt.searchSchedule(input);

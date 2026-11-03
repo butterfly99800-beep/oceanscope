@@ -6,10 +6,10 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 
-const pacificLoops = ["PCC1", "PCN1", "PCN3", "PCS1"];
+const pacificLoops = ["PCC1", "PCN1", "PCN3", "PCS1", "PCS2", "PVCS", "SEAP", "PSX", "PNW1", "PNW2", "PNW3", "PNW4", "PNW5"];
 const europeLoops = ["LL1", "LL2", "LL3", "LL4", "LL5", "LL6", "LL7"];
 type LoopPort = { name: string; locode: string };
-function documentUrl(code: string) { return root + code + (europeLoops.includes(code) ? "%20" : "") + "_LT.pdf"; }
+function documentUrl(code: string) { return root + code + ((europeLoops.includes(code) || code === "PSX") ? "%20" : "") + "_LT.pdf"; }
 const root = "https://www.oocl.com/SiteCollectionDocuments/OOCL/eServices/Sailing%20Schedule%20by%20Service/";
 const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 const pending = new Map<string, Promise<string>>();

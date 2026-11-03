@@ -72,7 +72,7 @@ export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRe
     for (let step = 0; step < 3; step++) {
       const { $ } = readForm(current.html, current.url);
       $("script,style").remove();
-      if (/no\s+results?\s+(?:(?:were|was|are)\s+)?found/i.test($("body").text())) return { texts: [], warnings: ["NO_SCHEDULE_FOUND"] };
+
       const links = $("a").toArray().filter(a => /^\s*Details\s*$/i.test($(a).text()));
       if (links.length) {
         const texts: string[] = [];
@@ -94,6 +94,7 @@ export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRe
         if (!texts.length && warnings.length) throw new Error(warnings[0]);
         return { texts, warnings };
       }
+      if (/no\s+results?\s+(?:(?:were|was|are)\s+)?found/i.test($("body").text())) return { texts: [], warnings: ["NO_SCHEDULE_FOUND"] };
       let selected = false;
       for (const link of $("a[onclick]").toArray()) {
         const match = $(link).attr("onclick")?.match(/select(Origin|Destination)\('([^']*)','([^']*)','([^']*)'\)/);
