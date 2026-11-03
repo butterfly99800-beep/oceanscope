@@ -5,7 +5,7 @@ import { matchesSourcePort, samePortCode } from "@/features/ports/server/source-
 import { jsonError, parsePagination } from "@/features/admin/server/api-utils";
 import { acquireCoscoScraperLock, releaseCoscoScraperLock } from "@/features/cosco-scraper/server/cosco-scraper-lock";
 import { currentScheduleFormat, saveCoscoSchedules } from "@/features/cosco-scraper/server/save-cosco-schedules";
-import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
+import type { CoscoSchedulePreview, InlandRailOption } from "@/features/cosco-scraper/types";
 import { mapSchedule, scheduleInclude } from "@/features/schedules/server/schedule-mapper";
 import { COSCOProvider } from "@/features/shipping/providers/cosco/provider";
 import { OOCLProvider } from "@/features/shipping/providers/oocl/provider";
@@ -24,6 +24,7 @@ type ProviderFetchStatus = {
   status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error";
   resultCount: number;
   warnings: string[];
+  inlandRail?: InlandRailOption[];
 };
 type LiveFetchState = { done: boolean; startedAt: number; forceRefresh?: boolean; providers: ProviderFetchStatus[] };
 const liveFetchStates = new Map<string, LiveFetchState>();
@@ -301,6 +302,7 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
               : result.warnings.some((warning) => /^(?:NO_SCHEDULE_FOUND|COSCO_NO_RESULTS)$|returned no routings/i.test(warning)) ? "no_results" : "error";
             return;
           }
+          if (provider.code === "COSCO") status.inlandRail = result.schedules.flatMap(item => item.inlandRail ? [item.inlandRail] : []);
           const savedResults = [];
           // A new carrier may not exist yet. Serialize destination writes so LA and
           // Long Beach cannot race to create the same unique carrier code.
@@ -318,8 +320,8 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
           }));
           const saved = savedResults.reduce((total, item) => ({ created: total.created + item.created, updated: total.updated + item.updated, skippedItems: [...total.skippedItems, ...item.skippedItems] }), { created: 0, updated: 0, skippedItems: [] as Array<{ id: string; reason: string }> });
           status.resultCount = saved.created + saved.updated;
-          status.status = status.resultCount ? "success" : "error";
-          if (!status.resultCount && !saved.skippedItems.length) status.warnings.push("RESULT_PORT_MISMATCH: returned locations do not match the requested destination");
+          status.status = status.resultCount || status.inlandRail?.length ? "success" : "error";
+          if (!status.resultCount && !status.inlandRail?.length && !saved.skippedItems.length) status.warnings.push("RESULT_PORT_MISMATCH: returned locations do not match the requested destination");
           if (!status.resultCount && saved.skippedItems.length) {
             status.warnings = [...status.warnings, ...saved.skippedItems.slice(0, 3).map((item) => item.reason)];
           }

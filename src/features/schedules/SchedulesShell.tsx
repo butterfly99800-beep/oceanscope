@@ -32,12 +32,15 @@ function createInitialCriteria(): ScheduleSearchCriteria {
 const initialFilters: ScheduleFilterState = { carriers: [], direct: "all", stopCount: "all", departureFrom: "", transitDays: "all", serviceName: "", vesselName: "", terminal: "" };
 
 type PortListResponse = { data: PortOption[] };
-type ProviderFetchStatus = { code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
+import type { InlandRailOption } from "@/features/cosco-scraper/types";
+
+type ProviderFetchStatus = { inlandRail?: InlandRailOption[]; code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
 type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: number }; done: boolean; providers?: ProviderFetchStatus[] };
 
 const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
+  if (provider.inlandRail?.length) return [provider.resultCount ? provider.resultCount + " 条完整船期" : "", provider.inlandRail.length + " 条含铁路段"].filter(Boolean).join("，");
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条`;
   if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
   if (provider.warnings.some(w => /INLAND_UNSUPPORTED/.test(w))) return "内陆段暂未支持";
@@ -335,6 +338,16 @@ export function SchedulesShell() {
                     </span>
                   ))}
                 </div>
+                {providerStatuses.flatMap(provider => provider.inlandRail?.length ? <details key={provider.code} className="mt-3">
+                  <summary>COSCO 含铁路段方案（目的地到达时间未公布）</summary>
+                  <div className="overflow-x-auto"><table className="mt-2 w-full text-left text-sm">
+                    <thead><tr>{["船名 / 航次","起运地 / 离港","卸船港 / 到港","内陆场站","运输方式","查询目的地","目的地 ETA"].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                    <tbody>{provider.inlandRail.map(row => <tr key={row.id}>
+                      <td>{row.vessel} {row.voyage}</td><td>{row.origin} {row.departure.slice(0,10)}</td>
+                      <td>{row.dischargePort} {row.dischargeEta?.slice(0,10)}</td><td>{row.facility}</td>
+                      <td>{row.modes}</td><td>{row.requestedDestination}</td><td>{row.destinationEta}</td>
+                    </tr>)}</tbody>
+                  </table></div></details> : [])}
                 {providerStatuses.flatMap(provider => provider.warnings.filter(warning => warning.startsWith("MSC_DATE_ADJUSTED:")).map(warning => <p key={`${provider.code}-${warning}`} className="mt-2 text-xs text-amber-800">{warning.replace("MSC_DATE_ADJUSTED: ", "MSC：")}</p>))}
                 {providerStatuses.filter(provider => provider.status === "success" && provider.warnings.some(warning => /TIMEOUT|DETAIL_FAILED|PARSE_INCOMPLETE/.test(warning))).map(provider => <p key={`partial-${provider.code}`} className="mt-2 text-xs text-amber-800">{carrierLabels[provider.code] || provider.code}：已显示获取到的结果，部分方案未能完成获取，可稍后重新查询。</p>)}
                 {providerStatuses.some((provider) => provider.warnings.some((warning) => /CMA_ACCESS_BLOCKED/.test(warning))) ? <p className="mt-2 text-xs text-amber-800">CMA 官网限制当前连接访问，暂未返回船期；该限制页面没有可操作的验证码。</p> : null}

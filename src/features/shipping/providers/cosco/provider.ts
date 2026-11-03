@@ -59,10 +59,31 @@ export const COSCOProvider: ShippingProvider<CoscoProviderSearchInput, CoscoScra
       },
       input.mode
     );
-    // The public response describes ocean POL/POD plus inland facilities. Do not
-    // relabel the ocean ETA as an inland delivery ETA when the latter is absent.
-    if (result.schedules.some(item => /Rail/i.test(item.rawText) && item.destinationText.split(",")[0].trim().toLowerCase() !== input.destinationPort.name.split(",")[0].trim().toLowerCase())) {
-      result.warnings.push("COSCO_INLAND_UNSUPPORTED: official ocean legs returned; final inland arrival is not provided as ETA");
+    // Bind partial ocean legs to the destination selected in the official POST.
+    const requestedCode = input.destinationPort.locode;
+    const confirmed = result.debug?.network.some(probe => {
+      if (probe.status !== 200 || !probe.url.includes("/purpoShipmentWs") || !probe.postData) return false;
+      try {
+        const request = JSON.parse(probe.postData);
+        return request.destinationCity?.split(",").at(-1)?.trim() === requestedCode
+          && request.originCityUuid === (input.originCityUuid || originCity?.uuid)
+          && request.destinationCityUuid === (input.destinationCityUuid || destinationCity?.uuid);
+      } catch { return false; }
+    });
+    for (const item of result.schedules) {
+      if (!confirmed || !item.vesselName || !item.etd || !item.destinationFacilityName ||
+          item.etd.slice(0, 10) < input.departureDate.slice(0, 10) || (input.dateTo && item.etd.slice(0, 10) > input.dateTo.slice(0, 10)) ||
+          item.destinationText.split(",")[0].trim().toLowerCase() === input.destinationPort.name.split(",")[0].trim().toLowerCase()) continue;
+      try {
+        const evidence = JSON.parse(item.rawText);
+        const last = evidence.officialLegs?.at(-1) ?? evidence;
+        if (typeof last.inboundTotalTransportModes !== "string" || !/\brail\b/i.test(last.inboundTotalTransportModes)
+            || last.pod !== item.destinationText || String(last.inboundFacilityName || "").replace(/\s+/g, " ").trim() !== item.destinationFacilityName) continue;
+        item.inlandRail = { id: item.id, vessel: item.vesselName, voyage: item.voyageNumber,
+          origin: item.originText, departure: item.etd, dischargePort: item.destinationText, dischargeEta: item.eta,
+          facility: item.destinationFacilityName, modes: last.inboundTotalTransportModes,
+          requestedDestination: requestedCode, destinationEta: null };
+      } catch { /* Page-text rows alone do not establish an inland itinerary. */ }
     }
     return result;
   },
