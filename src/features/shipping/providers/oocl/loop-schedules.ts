@@ -8,7 +8,7 @@ import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 
 const pacificLoops = ["PCC1", "PCN1", "PCN3", "PCS1"];
 const europeLoops = ["LL1", "LL2", "LL3", "LL4", "LL5", "LL6", "LL7"];
-const destinationNames = { USLAX: "Los Angeles", USLGB: "Long Beach", DEHAM: "Hamburg" } as const;
+type LoopPort = { name: string; locode: string };
 function documentUrl(code: string) { return root + code + (europeLoops.includes(code) ? "%20" : "") + "_LT.pdf"; }
 const root = "https://www.oocl.com/SiteCollectionDocuments/OOCL/eServices/Sailing%20Schedule%20by%20Service/";
 const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
@@ -50,12 +50,13 @@ function parseDate(day:number, month:number, reference:Date) {
   const candidates = [-1,0,1].map(offset=>new Date(Date.UTC(reference.getUTCFullYear()+offset,month,day,12))).filter(d=>d.getUTCDate()===day && Math.abs(+d-+reference)<180*86400000);
   return candidates.length===1 ? candidates[0].toISOString().slice(0,10) : null;
 }
-export function parseLoop(text:string, loop:string, destination:keyof typeof destinationNames, from:string,to:string) {
+export function parseLoop(text:string, loop:string, origin:LoopPort, destination:LoopPort, from:string,to:string) {
   const stamp = text.match(/Last Update Date:\s*(\d{2})-([A-Za-z]{3})-(\d{4})/);
   if (!stamp || months.indexOf(stamp[2])<0) throw new Error("OOCL_PDF_RESPONSE_INVALID: publication date missing");
   const reference = new Date(Date.UTC(+stamp[3],months.indexOf(stamp[2]),+stamp[1],12));
   const rows:CoscoSchedulePreview[]=[];
-  const portName=destinationNames[destination];
+  const city = (name:string) => name.split(",")[0].trim().toLowerCase();
+  const originName = city(origin.name), destinationName = city(destination.name);
   // PDF text extraction may wrap a single header row across several lines.
   const normalized = text.replace(/^Vessel Name [^\f]*?(?=^Vessel\/Voyage )/gm, header =>
     /Arr--Dep|Copyright|Last Update Date/.test(header) ? header : header.trim().replace(/\s+/g, " ") + "\n");
@@ -76,17 +77,29 @@ export function parseLoop(text:string, loop:string, destination:keyof typeof des
       cells.forEach((c,i)=>{const m=months.indexOf(c[4]);if(m<0)return;const dep=parseDate(+c[3],m,reference),arr=parseDate(+c[2],m-(+c[2]>+c[3]?1:0),reference);if(dep&&arr)columns[i].push({port:c[1].trim(),arrival:arr,departure:dep,raw:c[0].trim()});});
     }
     columns.forEach((calls,i)=>{if(/TO BE ADVISED|TBA|TBD/i.test(names[i]) || !vv[i])return;
-      for(let j=0;j<calls.length;j++){const a=calls[j];if(a.port!=='Shanghai'||a.departure<from||a.departure>to)continue;
-        const onward=calls.slice(j+1);const nextShanghai=onward.findIndex(x=>!x.port||x.port==='Shanghai');const b=(nextShanghai>=0?onward.slice(0,nextShanghai):onward).find(x=>x.port===portName);if(!b||b.arrival<=a.departure)continue;
+      for(let j=0;j<calls.length;j++){const a=calls[j];if(city(a.port)!==originName||a.departure<from||a.departure>to)continue;
+        const onward=calls.slice(j+1);const nextOrigin=onward.findIndex(x=>!x.port||city(x.port)===originName);const b=(nextOrigin>=0?onward.slice(0,nextOrigin):onward).find(x=>city(x.port)===destinationName);if(!b||b.arrival<=a.departure)continue;
         const raw=`POL:\t${a.port}\nFinal Destination Hub:\t${b.port}\nVessel/Voyage:\t${vv[i]}\nVessel Name:\t${names[i]}\n${loop}\n${a.raw}\n${b.raw}\nSource: ${documentUrl(loop)}\n${stamp[0]}`;
-        rows.push({id:'oocl-loop-'+createHash('sha256').update([loop,vv[i],a.departure,destination].join('|')).digest('hex'),carrierName:'OOCL',serviceName:loop,routeName:null,vesselName:names[i],voyageNumber:vv[i],originText:a.port,destinationText:b.port,originLocode:'CNSHA',destinationLocode:destination,etd:a.departure+'T12:00:00.000Z',eta:b.arrival+'T12:00:00.000Z',etdTimeKnown:false,etaTimeKnown:false,transitDays:null,direct:null,stopCount:null,transitPorts:[],rawText:raw});
+        rows.push({id:'oocl-loop-'+createHash('sha256').update([loop,vv[i],a.departure,...(origin.locode === "CNSHA" ? [] : [origin.locode]),destination.locode].join('|')).digest('hex'),carrierName:'OOCL',serviceName:loop,routeName:null,vesselName:names[i],voyageNumber:vv[i],originText:a.port,destinationText:b.port,originLocode:origin.locode,destinationLocode:destination.locode,etd:a.departure+'T12:00:00.000Z',eta:b.arrival+'T12:00:00.000Z',etdTimeKnown:false,etaTimeKnown:false,transitDays:null,direct:null,stopCount:null,transitPorts:[],rawText:raw});
       }
     });
   }
   return rows;
 }
-export async function queryShanghaiLoops(destination:keyof typeof destinationNames,from:string,to:string) {
-  const loops = destination === "DEHAM" ? europeLoops : pacificLoops;
-  const results=await Promise.allSettled(loops.map(async loop=>parseLoop(await documentText(loop),loop,destination,from,to)));
-  return {schedules:results.flatMap(r=>r.status==='fulfilled'?r.value:[]),warnings:results.flatMap(r=>r.status==='rejected'?[String(r.reason)]:[])};
+export async function queryServiceLoops(origin:LoopPort,destination:LoopPort,from:string,to:string) {
+  const loops = [...europeLoops, ...pacificLoops];
+  const schedules: CoscoSchedulePreview[] = [];
+  const warnings: string[] = [];
+  // Each document is fetched live. Limit simultaneous downloads from the carrier.
+  for (let index = 0; index < loops.length; index += 3) {
+    const batch = loops.slice(index, index + 3);
+    const results = await Promise.allSettled(batch.map(async loop =>
+      parseLoop(await documentText(loop), loop, origin, destination, from, to)));
+    results.forEach((result, offset) => {
+      if (result.status === "fulfilled") schedules.push(...result.value);
+      else warnings.push(batch[offset] + ": " + String(result.reason));
+    });
+    if (warnings.some(warning => warning.includes("OOCL_PDF_HTTP_429"))) break;
+  }
+  return { schedules, warnings };
 }

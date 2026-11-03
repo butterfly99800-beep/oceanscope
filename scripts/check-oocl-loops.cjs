@@ -10,11 +10,14 @@ Vessel/Voyage AAA/001 Vessel/Voyage BBB/002
 Port Arr--Dep Port Arr--Dep
 Shanghai 28--30 Dec Ningbo 25--26 Dec
 Long Beach 10--11 Jan Los Angeles 08--10 Jan`;
-const rows = out.parseLoop(table,'PCC1','USLGB','2026-12-01','2026-12-31');
+const shanghai = {name:'Shanghai',locode:'CNSHA'}, longBeach = {name:'Long Beach',locode:'USLGB'}, losAngeles = {name:'Los Angeles',locode:'USLAX'};
+const rows = out.parseLoop(table,'PCC1',shanghai,longBeach,'2026-12-01','2026-12-31');
 assert.equal(rows.length,1);
 assert.equal(rows[0].vesselName,'TEST A');
 assert.equal(rows[0].eta.slice(0,10),'2027-01-10');
 assert.equal(rows[0].etdTimeKnown,false);
-assert.equal(out.parseLoop(table,'PCC1','USLAX','2026-12-01','2026-12-31').length,0);
-assert.equal(out.parseLoop(table.replace('Long Beach 10--11 Jan Los Angeles 08--10 Jan','Long Beach 10--11 Jan'),'PCC1','USLGB','2026-12-01','2026-12-31').length,0);
+assert.equal(out.parseLoop(table,'PCC1',shanghai,losAngeles,'2026-12-01','2026-12-31').length,0);
+assert.equal(out.parseLoop(table.replace('Long Beach 10--11 Jan Los Angeles 08--10 Jan','Long Beach 10--11 Jan'),'PCC1',shanghai,longBeach,'2026-12-01','2026-12-31').length,0);
 console.log('PASS: OOCL publication date, calendar rollover, vessel columns and incomplete rows');
+
+assert.equal(out.parseLoop(table,'PCC1',{name:'Ningbo',locode:'CNNGB'},losAngeles,'2026-12-01','2026-12-31')[0].vesselName,'TEST B');
