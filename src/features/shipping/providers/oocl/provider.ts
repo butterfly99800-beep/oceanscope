@@ -4,7 +4,7 @@ import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { launchPublicBrowser } from "@/features/shipping/providers/public-browser";
 import type { ShippingProvider } from "@/features/shipping/providers/types";
-import { canonicalPortCode, matchesSourcePort } from "@/features/ports/server/source-port-match";
+import { canonicalPortCode, matchesSourcePort, officialPortName } from "@/features/ports/server/source-port-match";
 import { queryOoclHttp, MOBILE_UA, OOCL_MOBILE_URL, ooclCitySelector } from "./http";
 
 type OoclProviderPort = Pick<Port, "name" | "locode"> & { id?: string };
@@ -30,7 +30,7 @@ const months: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4,
 
 async function toOoclPortValue(port: OoclProviderPort) {
   const search = port.id ? await getCarrierPortMapping("OOCL", port.id, "SEARCH_NAME") : null;
-  const keyword = search?.mappingValue || port.name || port.locode;
+  const keyword = search?.mappingValue || officialPortName(port) || port.locode;
   return keyword.split(",")[0].trim();
 }
 
@@ -267,8 +267,8 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
     {
       const to = input.dateTo?.slice(0,10) || new Date(new Date(input.departureDate).getTime()+28*86400000).toISOString().slice(0,10);
       const published = await queryServiceLoops(
-        { ...input.originPort, locode: canonicalPortCode(input.originPort.locode) },
-        { ...input.destinationPort, locode: canonicalPortCode(input.destinationPort.locode) },
+        { ...input.originPort, name: officialPortName(input.originPort), locode: canonicalPortCode(input.originPort.locode) },
+        { ...input.destinationPort, name: officialPortName(input.destinationPort), locode: canonicalPortCode(input.destinationPort.locode) },
         input.departureDate.slice(0,10), to);
       if (published.schedules.length) return { source:"OOCL_LIVE", ...published, durationMs:Date.now()-started, fromCache:false };
       if (published.warnings.length) httpFailure += "; " + published.warnings.join(", ");

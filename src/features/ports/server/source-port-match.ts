@@ -4,6 +4,10 @@ type SourcePort = Pick<Port, "name" | "nameZh" | "locode">;
 // Explicit carrier spelling, not a fuzzy city match (e.g. Shenzhen != Yantian).
 const officialNames: Record<string, string[]> = { CNYTN: ["Yantian"], CNSHK: ["Shekou"] };
 
+export function officialPortName(port: Pick<Port, "name" | "locode">) {
+  return officialNames[port.locode]?.[0] || port.name;
+}
+
 export function matchesSourcePort(value: string | undefined, port: SourcePort) {
   if (!value) return false;
   const normalized = value.split(/[,;(]/)[0].trim().toLowerCase();

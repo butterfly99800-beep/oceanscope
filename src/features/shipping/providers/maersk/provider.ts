@@ -64,6 +64,8 @@ async function resolveGeoId(port: MaerskProviderPort): Promise<string | null> {
   // 1) 用已导入的 CSV 映射（codeType=GEOID）
   const mapping = await getCarrierPortMapping("MAERSK", port.id, "GEOID");
   if (mapping?.mappingValue) return mapping.mappingValue;
+  // MAERSK geography returns this exact CNYTN city for Yantian (not the free-trade zone).
+  if (port.locode === "CNYTN") return "0L3DBFFJ3KZ9A";
   // 2) 兜底：Maersk 公开地点接口按城市名查询，匹配国家
   try {
     const url = `${MAERSK_LOCATION_URL}?cityName=${encodeURIComponent(port.name)}&pageSize=25&sort=cityName&type=city`;
