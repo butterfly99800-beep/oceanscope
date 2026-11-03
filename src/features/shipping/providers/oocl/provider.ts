@@ -222,6 +222,28 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
   code: "OOCL",
   async searchSchedule(input) {
     const started = Date.now();
+    if (process.env.OOCL_USE_LOCAL_WORKER === "true") {
+      try {
+        const token = process.env.OOCL_WORKER_TOKEN;
+        if (!token || token.length < 32) throw new Error("missing worker token");
+        const response = await fetch("http://127.0.0.1:18341/query", {
+          method: "POST", cache: "no-store", redirect: "error",
+          headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            originPort: { name: input.originPort.name, locode: input.originPort.locode },
+            destinationPort: { name: input.destinationPort.name, locode: input.destinationPort.locode },
+            departureDate: input.departureDate, dateTo: input.dateTo,
+          }), signal: AbortSignal.timeout(input.timeBudgetMs || 180000),
+        });
+        if (!response.ok) throw new Error("worker HTTP " + response.status);
+        const result = await response.json();
+        if (result.source !== "OOCL_LIVE" || result.fromCache !== false ||
+            !Array.isArray(result.schedules) || !Array.isArray(result.warnings)) throw new Error("invalid worker response");
+        return result;
+      } catch {
+        return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL_LOCAL_WORKER_UNAVAILABLE: check local worker and SSH tunnel"], fromCache: false, durationMs: Date.now() - started };
+      }
+    }
     let httpFailure = "";
     try {
       const [origin, destination] = await Promise.all([toOoclPortValue(input.originPort), toOoclPortValue(input.destinationPort)]);
