@@ -83,6 +83,7 @@ function idFromNote(note) {
 }
 
 const carriers = [
+  { code: "ONE", name: "ONE", nameZh: "海洋网联船务", country: "Singapore" },
   { code: "COSCO", name: "COSCO SHIPPING", nameZh: "中远海运", country: "China" },
   { code: "OOCL", name: "OOCL", nameZh: "东方海外", country: "Hong Kong" },
   { code: "CMA", name: "CMA CGM", nameZh: "达飞轮船", country: "France" },

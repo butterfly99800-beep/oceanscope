@@ -149,6 +149,7 @@ enum ScheduleDataSource {
   MAERSK_LIVE_QUERY
   MSC_LIVE_QUERY
   HAPAG_LIVE_QUERY
+  ONE_LIVE_QUERY
 }
 
 enum ScheduleFetchJobSource {
@@ -205,6 +206,7 @@ model SailingSchedule {
   fetchedAt             DateTime?
   rawSourceData         Json?
   sourceReference       String?               @db.VarChar(160)
+  routingKey            String                @default("") @db.VarChar(64)
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
   carrier               Carrier               @relation(fields: [carrierId], references: [id], onDelete: Restrict)
@@ -214,7 +216,7 @@ model SailingSchedule {
   transitPorts          ScheduleTransitPort[]
   routeNodes            ScheduleRouteNode[]
 
-  @@unique([carrierId, vesselName, voyageNumber, originPortId, destinationPortId, etd, source])
+  @@unique([carrierId, vesselName, voyageNumber, originPortId, destinationPortId, etd, source, routingKey], map: "sailingschedule_routing_identity_key")
   @@index([carrierId])
   @@index([routeId])
   @@index([originPortId])

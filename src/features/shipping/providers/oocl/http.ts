@@ -42,7 +42,7 @@ type Criteria = { origin: string; destination: string; originCode: string; desti
 
 export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRequestContext; html: string; url: string; fields?: Record<string, string> }) {
   const http = existing?.http || await request.newContext({ userAgent: MOBILE_UA });
-  const deadline = Date.now() + 35000;
+  const deadline = Date.now() + 150000;
   const warnings: string[] = [];
   const timeout = () => {
     const remaining = deadline - Date.now();
@@ -75,19 +75,22 @@ export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRe
       const links = $("a").toArray().filter(a => /^\s*Details\s*$/i.test($(a).text()));
       if (links.length) {
         const texts: string[] = [];
-        for (const link of links.slice(0, 8)) {
+        for (const link of links) {
           const index = $(link).attr("onclick")?.match(/toDetail\((\d+)\)/)?.[1];
-          if (index === undefined || !$(link).attr("id")) throw new Error("OOCL_HTTP_RESPONSE_INVALID: detail link changed");
           try {
+            if (index === undefined || !$(link).attr("id")) throw new Error("OOCL_HTTP_RESPONSE_INVALID: detail link changed");
             const detail = await submit(current, { "form:_link_hidden_": $(link).attr("id")!, "form:recordIndex": index });
             texts.push(detailText(detail.html));
           } catch (error) {
-            if (!texts.length) throw error;
-            warnings.push(`OOCL_DETAIL_FAILED: ${error instanceof Error ? error.message.split("\n")[0] : "request failed"}`);
-            break;
+            const reason = error instanceof Error ? error.message.split("\n")[0] : "request failed";
+            warnings.push(`OOCL_DETAIL_FAILED: detail ${index ?? "unknown"}: ${reason}`);
+            if (/RATE_LIMITED|ACCESS_BLOCKED|VERIFICATION_REQUIRED|closed/i.test(reason) || Date.now() >= deadline) {
+              if (!texts.length) throw error;
+              break;
+            }
           }
         }
-        if (links.length > 8) warnings.push("OOCL_RESULT_LIMIT: first 8 official routing details requested");
+        if (!texts.length && warnings.length) throw new Error(warnings[0]);
         return { texts, warnings };
       }
       let selected = false;
@@ -110,4 +113,10 @@ export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRe
     }
     throw new Error("OOCL_HTTP_RESPONSE_INVALID: too many form transitions");
   } finally { if (!existing) await http.dispose(); }
+}
+
+// Match the official link's location code, not a same-name city or a hidden page.
+export function ooclCitySelector(kind: "Origin" | "Destination", code: string) {
+  if (!/^[A-Z]{2}[A-Z0-9]{3}$/.test(code)) throw new Error("OOCL_PORT_NOT_FOUND: invalid location code");
+  return `a[onclick*="select${kind}('${code}',"]:visible`;
 }

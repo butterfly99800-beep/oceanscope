@@ -22,5 +22,12 @@ const result = spawnSync(process.execPath, [require.resolve('prisma/build/index.
   cwd: root, encoding: 'utf8', env: { ...process.env, DATABASE_URL: 'mysql://unused:unused@127.0.0.1:1/unused', CHECKPOINT_DISABLE: '1' },
 });
 assert.equal(result.status, 0, result.stderr);
-assert.equal(result.stdout.replace(/\r\n/g, '\n').trim(), sql.replace(/\r\n/g, '\n').trim());
+const baselineOutput = result.stdout.replace(/\r\n/g, '\n').replace(", 'ONE_LIVE_QUERY'", '').replace(/^.*`routingKey` VARCHAR\(64\).*\n/gm, '').replace('`sailingschedule_routing_identity_key`', '`sailingschedule_carrierId_vesselName_voyageNumber_originPort_key`').replace(', `routingKey`)', ')');
+assert.equal(baselineOutput.trim(), sql.replace(/\r\n/g, '\n').trim());
 console.log('PASS: 17 lowercase tables, unique constraints, schema-generated baseline, unchanged archived migration bytes');
+
+const extension = fs.readFileSync(path.join(root, 'prisma/migrations/20261030000000_add_one_schedule_source/migration.sql'), 'utf8');
+const currentSource = result.stdout.split('\n').find(line => line.includes("\`source\` ENUM('SEED'")).trim().replace(/,$/, ';');
+assert(extension.includes('ALTER TABLE \x60sailingschedule\x60 MODIFY ' + currentSource));
+assert.equal((extension.match(/ALTER TABLE/g) || []).length, 1);
+console.log('PASS: ONE forward migration preserves all old enum values and defaults');

@@ -42,6 +42,19 @@ assert.equal(out.detailText('<table><tr><td>POL:</td><td>Shanghai</td></tr></tab
     }}}), /RATE_LIMITED/);
   assert.equal(limitedCalls, 1);
   assert.deepEqual(result.texts, ['POL:\tShanghai']);
+  // A broken middle detail must not hide subsequent official routings.
+  const allLinks = Array.from({length: 12}, (_, i) => '<a id="d'+i+'" onclick="toDetail('+i+')">Details</a>').join('');
+  const attempted = [];
+  const many = await out.queryOoclHttp({}, {url, html:form(allLinks), http:{post:async(_url,options)=>{
+    const index = Number(options.form['form:recordIndex']);
+    attempted.push(index);
+    if (index === 5) return {ok:()=>false,status:()=>503};
+    return {ok:()=>true,url:()=>url,text:async()=>'<table><tr><td>POL:</td><td>Port '+index+'</td></tr></table>'};
+  }}});
+  assert.deepEqual(attempted, Array.from({length:12}, (_, i)=>i));
+  assert.equal(many.texts.length, 11);
+  assert.equal(many.texts.at(-1), 'POL:\tPort 11');
+  assert(many.warnings.some(w=>w.includes('detail 5')));
   const empty = await out.queryOoclHttp({}, {http, url, html:form('No result were found')});
   assert.deepEqual(empty.warnings, ['NO_SCHEDULE_FOUND']);
   assert.equal(calls, 2);

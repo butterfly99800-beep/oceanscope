@@ -17,7 +17,7 @@ require.extensions['.ts'] = (module, filename) => {
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 (async () => {
-  const codes = (process.argv[2] || 'MSC,HAPAG,CMA,OOCL,MAERSK,COSCO').split(',');
+  const codes = (process.argv[2] || 'ONE,MSC,HAPAG,CMA,OOCL,MAERSK,COSCO').split(',');
   const originPort = await prisma.port.findFirstOrThrow({ where: { locode: process.argv[3] || 'CNSHA' } });
   const destinationPort = await prisma.port.findFirstOrThrow({ where: { locode: process.argv[4] || 'USLGB' } });
   const departureDate = process.argv[5] || new Date().toISOString().slice(0, 10);

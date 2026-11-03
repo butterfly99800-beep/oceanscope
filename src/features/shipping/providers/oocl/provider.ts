@@ -4,7 +4,7 @@ import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { launchPublicBrowser } from "@/features/shipping/providers/public-browser";
 import type { ShippingProvider } from "@/features/shipping/providers/types";
 import { canonicalPortCode, matchesSourcePort } from "@/features/ports/server/source-port-match";
-import { queryOoclHttp, MOBILE_UA, OOCL_MOBILE_URL } from "./http";
+import { queryOoclHttp, MOBILE_UA, OOCL_MOBILE_URL, ooclCitySelector } from "./http";
 
 type OoclProviderPort = Pick<Port, "id" | "name" | "locode">;
 
@@ -37,12 +37,6 @@ function formatMobileDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return `${String(date.getDate()).padStart(2, "0")} ${String(date.getMonth() + 1).padStart(2, "0")} ${date.getFullYear()}`;
-}
-
-function cityPattern(name: string, locode: string) {
-  const country = new Intl.DisplayNames(["en"], { type: "region" }).of(locode.slice(0, 2));
-  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${escape(name)}(?:,.*)?[,]\\s*${escape(country || locode.slice(0, 2))}\\s*$`, "i");
 }
 
 function toIsoDate(value: string | undefined, baseDate: string) {
@@ -152,10 +146,10 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
       return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL query criteria is incomplete."], durationMs: Date.now() - started, fromCache: false };
     }
 
-    const browser = await launchPublicBrowser({ channel: "msedge" });
+    const browser = await launchPublicBrowser({ channel: "msedge", lifetimeMs: 175000 });
     const schedules: CoscoSchedulePreview[] = [];
     let timedOut = false;
-    const budget = Math.min(60000, input.timeBudgetMs ?? 60000);
+    const budget = Math.min(170000, input.timeBudgetMs ?? 170000);
     const deadline = setTimeout(() => { timedOut = true; void browser.close().catch(() => undefined); }, Math.max(1000, budget - (Date.now() - started)));
     try {
       const page = await browser.newPage({ viewport: { width: 430, height: 900 }, userAgent: MOBILE_UA });
@@ -177,29 +171,22 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
       await page.locator("#form\\:sailinglDate").fill(mobileDate);
       // Let the mobile JSF handlers finish initialization before submitting.
       await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
-      await page.locator("#form\\:goToOriginList").click();
-      await page.waitForFunction(() => Array.from(document.querySelectorAll("a")).some(link =>
-        /select(?:Origin|Destination)\(/.test(link.getAttribute("onclick") || "") || /^\s*Details\s*$/i.test(link.textContent || ""))
-        || /no\s+results?\s+(?:(?:were|was|are)\s+)?found/i.test(document.body.innerText), undefined, { timeout: 15000 });
-      // The verified page may refresh its JSF/captcha state on each city page.
-      // Keep these transitions in the browser fallback; details still use HTTP.
-      const originOption = page.getByText(cityPattern(origin, input.originPort.locode)).first();
-      const destinationOption = page.getByText(cityPattern(destination, input.destinationPort.locode)).first();
-      const details = page.locator("a").filter({ hasText: /^\s*Details\s*$/i }).first();
+      const originOption = page.locator(ooclCitySelector("Origin", canonicalPortCode(input.originPort.locode))).first();
+      const destinationOption = page.locator(ooclCitySelector("Destination", canonicalPortCode(input.destinationPort.locode))).first();
+      const details = page.locator("a:visible").filter({ hasText: /^\s*Details\s*$/i }).first();
       const empty = page.getByText(/no\s+results?\s+(?:(?:were|was|are)\s+)?found/i).first();
-      if (await empty.isVisible()) throw new Error("NO_SCHEDULE_FOUND");
-      if (await originOption.isVisible()) {
-        await originOption.click();
-        await Promise.any([destinationOption, details, empty].map(option => option.waitFor({ state: "visible", timeout: 15000 })));
-        await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
-        await page.waitForTimeout(1500);
+      const navigate = async (control: import("playwright").Locator) => {
+        await Promise.all([page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20000 }), control.click()]);
+      };
+      await navigate(page.locator("#form\\:goToOriginList"));
+      for (let transition = 0; transition < 3; transition++) {
+        if (await detectHumanVerification(page)) throw new Error("OOCL_CAPTCHA_REQUIRED");
+        await Promise.any([originOption, destinationOption, details, empty].map(option => option.waitFor({ state: "visible", timeout: 12000 })));
+        if (await empty.isVisible()) throw new Error("NO_SCHEDULE_FOUND");
+        if (await details.isVisible()) break;
+        if (await originOption.isVisible()) await navigate(originOption);
+        else if (await destinationOption.isVisible()) await navigate(destinationOption);
       }
-      if (await empty.isVisible()) throw new Error("NO_SCHEDULE_FOUND");
-      if (await destinationOption.isVisible()) {
-        await destinationOption.click();
-        await Promise.any([details, empty].map(option => option.waitFor({ state: "visible", timeout: 20000 })));
-      }
-      if (await empty.isVisible()) throw new Error("NO_SCHEDULE_FOUND");
       await details.waitFor({ state: "visible", timeout: 10000 });
       await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
       // The result view publishes its hidden JSF state after the visible links.

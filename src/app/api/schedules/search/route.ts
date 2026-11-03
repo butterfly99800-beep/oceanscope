@@ -14,6 +14,8 @@ import { MAERSKProvider } from "@/features/shipping/providers/maersk/provider";
 import { HAPAGProvider } from "@/features/shipping/providers/hapag/provider";
 import { MSCProvider } from "@/features/shipping/providers/msc/provider";
 
+import { ONEProvider } from "@/features/shipping/providers/one/provider";
+
 const statusMap: Record<string, ScheduleStatus> = { "正常": "NORMAL", NORMAL: "NORMAL", "预计延误": "EXPECTED_DELAY", EXPECTED_DELAY: "EXPECTED_DELAY", "已延误": "DELAYED", DELAYED: "DELAYED", "即将截关": "CUTOFF_SOON", CUTOFF_SOON: "CUTOFF_SOON", "已取消": "CANCELLED", CANCELLED: "CANCELLED" };
 // 记录每个(起运|目的|日期)键的实时抓取状态，用于前端轮询补全。
 // done=false 表示仍有船司在后台抓取，前端应继续轮询；done=true 表示本轮抓取已结束。
@@ -32,8 +34,9 @@ const liveSources: ScheduleDataSource[] = [
   ScheduleDataSource.MAERSK_LIVE_QUERY,
   ScheduleDataSource.HAPAG_LIVE_QUERY,
   ScheduleDataSource.MSC_LIVE_QUERY,
+  ScheduleDataSource.ONE_LIVE_QUERY,
 ];
-const providers = [COSCOProvider, OOCLProvider, CMAProvider, MAERSKProvider, HAPAGProvider, MSCProvider] as const;
+const providers = [COSCOProvider, OOCLProvider, CMAProvider, MAERSKProvider, HAPAGProvider, MSCProvider, ONEProvider] as const;
 
 function sourceForProvider(code: string) {
   if (code === "OOCL") return ScheduleDataSource.OOCL_LIVE_QUERY;
@@ -41,6 +44,7 @@ function sourceForProvider(code: string) {
   if (code === "MAERSK") return ScheduleDataSource.MAERSK_LIVE_QUERY;
   if (code === "HAPAG") return ScheduleDataSource.HAPAG_LIVE_QUERY;
   if (code === "MSC") return ScheduleDataSource.MSC_LIVE_QUERY;
+  if (code === "ONE") return ScheduleDataSource.ONE_LIVE_QUERY;
   return ScheduleDataSource.COSCO_LIVE_QUERY;
 }
 
@@ -50,6 +54,7 @@ function carrierNameForProvider(code: string) {
   if (code === "MAERSK") return "MAERSK";
   if (code === "HAPAG") return "HAPAG-LLOYD";
   if (code === "MSC") return "MSC";
+  if (code === "ONE") return "ONE";
   return "COSCO SHIPPING";
 }
 
@@ -95,7 +100,7 @@ async function queryDestinations(targets: Port[], query: (port: Port) => Promise
 
 async function withProviderTimeout(code: string, task: Promise<LiveProviderResult>): Promise<LiveProviderResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = code === "OOCL" ? Math.max(providerTimeoutMs(), 110000) : providerTimeoutMs();
+  const timeout = code === "OOCL" ? Math.max(providerTimeoutMs(), 205000) : providerTimeoutMs();
   try {
     return await Promise.race([
       task,
@@ -275,7 +280,7 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
         const status = providerStatus(state, provider.code);
         status.status = "fetching";
         try {
-          const targets = provider.code === "COSCO" ? [destinationPort] : destinationPorts;
+          const targets = provider.code === "COSCO" || provider.code === "ONE" ? [destinationPort] : destinationPorts;
           const result = await withProviderTimeout(provider.code, queryDestinations(targets, (target) => provider.searchSchedule({
             originPort,
             destinationPort: target,
@@ -295,7 +300,10 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
               : result.warnings.some((warning) => /^(?:NO_SCHEDULE_FOUND|COSCO_NO_RESULTS)$|returned no routings/i.test(warning)) ? "no_results" : "error";
             return;
           }
-          const savedResults = await Promise.all(destinationPorts.map((actualDestination) => saveCoscoSchedules(result.schedules.filter((item) => {
+          const savedResults = [];
+          // A new carrier may not exist yet. Serialize destination writes so LA and
+          // Long Beach cannot race to create the same unique carrier code.
+          for (const actualDestination of destinationPorts) savedResults.push(await saveCoscoSchedules(result.schedules.filter((item) => {
             if (item.destinationLocode) return samePortCode(item.destinationLocode, actualDestination.locode);
             const name = item.destinationText.split(/[,;(]/)[0].trim().toLowerCase();
             return [actualDestination.name, actualDestination.nameZh, actualDestination.locode].some((value) => value?.toLowerCase() === name);
@@ -306,7 +314,7 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
             source: sourceForProvider(provider.code),
             carrierCode: provider.code,
             carrierName: carrierNameForProvider(provider.code),
-          })));
+          }));
           const saved = savedResults.reduce((total, item) => ({ created: total.created + item.created, updated: total.updated + item.updated, skippedItems: [...total.skippedItems, ...item.skippedItems] }), { created: 0, updated: 0, skippedItems: [] as Array<{ id: string; reason: string }> });
           status.resultCount = saved.created + saved.updated;
           status.status = status.resultCount ? "success" : "error";

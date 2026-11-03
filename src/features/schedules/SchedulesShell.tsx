@@ -1,5 +1,6 @@
 "use client";
 
+import { completeSchedulePages } from "@/features/schedules/lib/completeSchedulePages";
 import { ArrowLeft, RefreshCw, SlidersHorizontal, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -34,7 +35,7 @@ type PortListResponse = { data: PortOption[] };
 type ProviderFetchStatus = { code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
 type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: number }; done: boolean; providers?: ProviderFetchStatus[] };
 
-const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC" };
+const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条`;
@@ -162,7 +163,7 @@ export function SchedulesShell() {
   // 直到后端返回 done=true 或超时（最多 3 分钟），实现“先展示已搜到的、再慢慢补全”。
   const pollUntilDone = async (url: string) => {
     const token = ++pollTokenRef.current;
-    const deadline = Date.now() + 180000;
+    const deadline = Date.now() + 240000;
     setIsStreaming(true);
     let completed = false;
     let failures = 0;
@@ -175,7 +176,7 @@ export function SchedulesShell() {
             if (++failures >= 3) break;
             continue;
           }
-          const payload = await response.json() as ScheduleListResponse;
+          const payload = await completeSchedulePages(await response.json() as ScheduleListResponse, url);
           failures = 0;
           if (pollTokenRef.current !== token) return;
           setBaseResults(payload.data);
@@ -229,7 +230,7 @@ export function SchedulesShell() {
       if (refresh) params.set("refresh", "true");
       const response = await fetch(`/api/schedules/search?${params.toString()}`);
       if (!response.ok) throw new Error("船期接口请求失败");
-      const payload = await response.json() as ScheduleListResponse;
+      const payload = await completeSchedulePages(await response.json() as ScheduleListResponse, `/api/schedules/search?${params.toString()}`);
       setBaseResults(payload.data);
       setProviderStatuses(payload.providers ?? []);
       setHasSearched(true);
@@ -333,7 +334,7 @@ export function SchedulesShell() {
                   ))}
                 </div>
                 {providerStatuses.flatMap(provider => provider.warnings.filter(warning => warning.startsWith("MSC_DATE_ADJUSTED:")).map(warning => <p key={`${provider.code}-${warning}`} className="mt-2 text-xs text-amber-800">{warning.replace("MSC_DATE_ADJUSTED: ", "MSC：")}</p>))}
-                {providerStatuses.filter(provider => provider.status === "success" && provider.warnings.some(warning => /TIMEOUT|DETAIL_FAILED|PARSE_INCOMPLETE|RESULT_LIMIT/.test(warning))).map(provider => <p key={`partial-${provider.code}`} className="mt-2 text-xs text-amber-800">{carrierLabels[provider.code] || provider.code}：已显示获取到的结果，部分方案未能完成获取，可稍后重新查询。</p>)}
+                {providerStatuses.filter(provider => provider.status === "success" && provider.warnings.some(warning => /TIMEOUT|DETAIL_FAILED|PARSE_INCOMPLETE/.test(warning))).map(provider => <p key={`partial-${provider.code}`} className="mt-2 text-xs text-amber-800">{carrierLabels[provider.code] || provider.code}：已显示获取到的结果，部分方案未能完成获取，可稍后重新查询。</p>)}
                 {providerStatuses.some((provider) => provider.warnings.some((warning) => /CMA_ACCESS_BLOCKED/.test(warning))) ? <p className="mt-2 text-xs text-amber-800">CMA 官网限制当前连接访问，暂未返回船期；该限制页面没有可操作的验证码。</p> : null}
                 {providerStatuses.some((provider) => provider.warnings.some((warning) => /CAPTCHA_REQUIRED|VERIFICATION_REQUIRED/.test(warning))) ? <p className="mt-2 text-xs text-slate-500">部分船司需要官网验证，请在项目专用浏览器中完成验证。</p> : null}
               </div>

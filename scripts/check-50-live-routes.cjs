@@ -10,7 +10,7 @@ const routes = process.argv.slice(2).length ? process.argv.slice(2).map(x => x.s
 const reportDir = path.join(__dirname, '../reports');
 fs.mkdirSync(reportDir, { recursive: true });
 const output = path.join(reportDir, process.env.REPORT_NAME || 'live-50-2026-10-27.jsonl');
-const labels = { COSCO: 'COSCO', OOCL: 'OOCL', CMA: 'CMA CGM', MAERSK: 'MAERSK', HAPAG: 'Hapag-Lloyd', MSC: 'MSC' };
+const labels = { COSCO: 'COSCO', OOCL: 'OOCL', CMA: 'CMA CGM', MAERSK: 'MAERSK', HAPAG: 'Hapag-Lloyd', MSC: 'MSC', ONE: 'ONE' };
 (async () => {
   let ready = false;
   const startupDeadline = Date.now() + 90000;
@@ -61,7 +61,7 @@ const labels = { COSCO: 'COSCO', OOCL: 'OOCL', CMA: 'CMA CGM', MAERSK: 'MAERSK',
         record.counts = result.providerCounts;
         record.total = result.pagination?.total;
         record.samples = Object.keys(labels).map(code => result.data.find(row => row.carrierCode === code)).filter(Boolean).map(row => ({ carrier: row.carrierCode, vessel: row.vesselName, voyage: row.voyageNumber, origin: row.originPortCode, destination: row.destinationPortCode, etd: row.etd, eta: row.eta, lastUpdated: row.lastUpdated, rawSourceAvailable: row.rawSourceAvailable }));
-        assert.equal(result.providers.length, 6);
+        assert.equal(result.providers.length, 7);
         assert(result.providers.every(p => !['cached', 'pending', 'fetching'].includes(p.status)), 'Cached or unfinished provider');
         assert(result.data.every(row => row.rawSourceAvailable && new Date(row.lastUpdated).getTime() >= started - 1000), 'Missing provenance or stale row');
         for (let n = 0; n < 20; n++) {

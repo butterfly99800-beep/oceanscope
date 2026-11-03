@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 ﻿import { Prisma, type Port } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { matchesSourcePort, samePortCode } from "@/features/ports/server/source-port-match";
@@ -5,7 +6,7 @@ import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 
 export type SaveCoscoResult = { created: number; updated: number; skipped: number; skippedItems: Array<{ id: string; reason: string }> };
 
-type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY";
+type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY";
 
 type SaveOptions = { mode?: "skipDuplicates" | "updateDuplicates"; originPort?: Port; destinationPort?: Port; source?: LiveScheduleSource; carrierCode?: string; carrierName?: string };
 
@@ -27,9 +28,9 @@ async function findPort(tx: Prisma.TransactionClient, locode: string | null, tex
 async function findCarrier(tx: Prisma.TransactionClient, options: SaveOptions) {
   const code = options.carrierCode || "COSCO";
   const name = options.carrierName || "COSCO SHIPPING";
-  const existing = await tx.carrier.findFirst({ where: { OR: [{ code }, { name: { contains: name } }] } });
+  const existing = await tx.carrier.findUnique({ where: { code } });
   if (existing) return existing;
-  const countries: Record<string, string> = { COSCO: "China", OOCL: "Hong Kong, China", CMA: "France", MAERSK: "Denmark", HAPAG: "Germany", MSC: "Switzerland" };
+  const countries: Record<string, string> = { COSCO: "China", OOCL: "Hong Kong, China", CMA: "France", MAERSK: "Denmark", HAPAG: "Germany", MSC: "Switzerland", ONE: "Singapore" };
   return tx.carrier.create({ data: { name, code, country: countries[code] || "", status: "ACTIVE" } });
 }
 
@@ -76,6 +77,7 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     fetchedAt: new Date(),
     rawSourceData: item.rawText,
     sourceReference: item.id.slice(0, 160),
+    routingKey: item.rawText.startsWith('{"officialLegs":') ? createHash("sha256").update(item.id).digest("hex") : "",
   };
 }
 

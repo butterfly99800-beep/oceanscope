@@ -7,7 +7,7 @@ const WINDOWS_BROWSER_PATHS = [
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
 ];
 
-export async function launchPublicBrowser(options: { defaultHeadless?: boolean; channel?: "msedge" } = {}): Promise<Browser> {
+export async function launchPublicBrowser(options: { defaultHeadless?: boolean; channel?: "msedge"; lifetimeMs?: number } = {}): Promise<Browser> {
   const executablePath = [
     process.env.SCHEDULE_BROWSER_EXECUTABLE_PATH,
     ...(process.platform === "win32" ? WINDOWS_BROWSER_PATHS : []),
@@ -16,7 +16,7 @@ export async function launchPublicBrowser(options: { defaultHeadless?: boolean; 
     headless: true,
     ...(options.channel && process.platform === "win32" ? { channel: options.channel } : executablePath ? { executablePath } : {}),
   });
-  const timer = setTimeout(() => { void browser.close().catch(() => undefined); }, 70000);
+  const timer = setTimeout(() => { void browser.close().catch(() => undefined); }, options.lifetimeMs ?? 70000);
   browser.on("disconnected", () => clearTimeout(timer));
   return browser;
 }

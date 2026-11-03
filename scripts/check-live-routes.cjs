@@ -53,7 +53,7 @@ const routes = process.argv.slice(2).length ? process.argv.slice(2).map(pair => 
       while (!result && Date.now() - started < 150000) await page.waitForTimeout(1000);
       page.off('response', capture);
       assert(result?.done, 'Frontend forced live query did not complete without cached data');
-      assert.equal(result.providers.length, 6, 'Not all six providers were checked');
+      assert.equal(result.providers.length, 7, 'Not all seven providers were checked');
       assert(result.data.every(row => row.rawSourceAvailable), 'Missing raw official evidence');
       console.log('LIVE_RESULT', JSON.stringify({ origin, destination, dateFrom: today, durationMs: Date.now() - started, providers: result.providers, counts: result.providerCounts }));
       if (process.env.REQUIRE_ALL_PROVIDERS === 'true') {
@@ -68,7 +68,7 @@ const routes = process.argv.slice(2).length ? process.argv.slice(2).map(pair => 
         await page.waitForFunction(count => document.querySelectorAll('tbody tr').length > count, previousRows);
       }
       const body = await page.locator('body').innerText();
-      const labels = { COSCO: 'COSCO', OOCL: 'OOCL', CMA: 'CMA CGM', MAERSK: 'MAERSK', HAPAG: 'Hapag-Lloyd', MSC: 'MSC' };
+      const labels = { COSCO: 'COSCO', OOCL: 'OOCL', CMA: 'CMA CGM', MAERSK: 'MAERSK', HAPAG: 'Hapag-Lloyd', MSC: 'MSC', ONE: 'ONE' };
       for (const [code, count] of Object.entries(result.providerCounts)) {
         if (!count) continue;
         assert(body.includes(`${labels[code]}：${count} 条`), `Missing ${code} count in UI`);
