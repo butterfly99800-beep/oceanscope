@@ -2,3 +2,6 @@
 prisma/migrations/** text eol=lf
 # Preserve the exact historical bytes recorded in the archive manifest.
 prisma/migrations-archive/** -text
+
+# Preserve the audited CSV checksum on Windows and Linux.
+data/ports.csv -text

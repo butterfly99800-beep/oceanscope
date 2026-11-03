@@ -52,10 +52,10 @@ npm run build
 
 ## 主数据与管理员
 
-迁移只建结构，不写入演示船期、报价或订单。港口 CSV 必须从可信来源独立交付到服务器，例如 `/srv/oceanscope/data/ports.csv`，先审查来源及内容，再显式执行：
+迁移只建结构，不写入演示船期、报价或订单。仓库内的 `data/ports.csv` 含 1,007 个已审核港口。部署用户在项目目录加载私有环境，并显式运行一次导入：
 
 ```bash
-PORTS_DATA_FILE=/srv/oceanscope/data/ports.csv OCEANSCOPE_IMPORT_PORTS=true npm run db:import:ports
+PORTS_DATA_FILE=data/ports.csv OCEANSCOPE_IMPORT_PORTS=true npm run db:import:ports
 ```
 
 格式参见 `docs/ports-template.csv`。该模板只有表头，不是生产数据。导入前校验全部非空行的列数、LOCODE 和英文名称；重复执行只补充缺失港口、船司、映射，不覆盖已有字段，不删除旧映射。COSCO、OOCL 长数字 ID 只从原验证记录的 `id=完整数字` 提取，缺失时跳过，不从科学计数法猜测还原。导入中断可重跑；数据更正需要单独审查，不能靠重复导入覆盖。
