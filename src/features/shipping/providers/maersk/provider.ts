@@ -25,6 +25,7 @@ export type MaerskProviderResult = {
 };
 
 type GeoLocation = {
+  unLocCode?: string;
   cityName?: string;
   countryCode?: string;
   maerskGeoLocationId?: string;
@@ -68,13 +69,12 @@ async function resolveGeoId(port: MaerskProviderPort): Promise<string | null> {
     const res = await publicFetch(url, { headers: { Accept: "application/json", "Consumer-Key": MAERSK_CONSUMER_KEY } });
     if (!res.ok) return null;
     const data = (await res.json()) as GeoLocation[];
-    const country = (port.country || "").trim().toUpperCase();
-    const hit = (data || []).find(
-      (l) =>
-        l.maerskGeoLocationId &&
-        (!country || (l.countryCode || "").toUpperCase() === country || (l.countryCode || "").toUpperCase() === country.slice(0, 2))
-    );
-    return hit?.maerskGeoLocationId || null;
+    const country = port.locode.slice(0, 2).toUpperCase();
+    const candidates = data.filter(l => l.maerskGeoLocationId && l.countryCode?.toUpperCase() === country);
+    const exact = candidates.filter(l => l.unLocCode?.toUpperCase() === port.locode.toUpperCase());
+    if (exact.length === 1) return exact[0].maerskGeoLocationId || null;
+    const named = candidates.filter(l => l.cityName?.trim().toLowerCase() === port.name.trim().toLowerCase());
+    return !exact.length && named.length === 1 ? named[0].maerskGeoLocationId || null : null;
   } catch {
     return null;
   }
