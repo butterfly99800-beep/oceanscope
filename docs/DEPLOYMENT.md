@@ -77,3 +77,5 @@ PORTS_DATA_FILE=data/ports.csv OCEANSCOPE_IMPORT_PORTS=true npm run db:import:po
 验收空库结构、权限、管理员登录、普通账号不能访问管理接口、港口搜索、船期查询及地图。实时船期依赖船司公共服务；必须区分官网无结果、验证、限流和系统错误，不能以缓存或演示数据冒充实时成功。
 
 升级前备份数据库和迁移历史并验证恢复；DDL 失败可能部分生效，不能用 reset 或重复运行 seed 修复。应用回退到上个发布目录前先确认数据库兼容性。任何旧数据库迁移与生产数据修复必须单独制定方案。
+
+OOCL 移动查询失败后，上海至洛杉矶及长滩可从官方公开的跨太平洋分航线 PDF 提取同船靠港日期。服务器需要 `pdftotext`（Ubuntu 的 `poppler-utils`），可以用 `command -v pdftotext` 检查，或通过私有环境变量 `OOCL_PDFTOTEXT_PATH` 指定可执行文件。此来源覆盖已解析的航线表，不能代表所有中转方案。MSC 依次尝试全球站、中国站公开 HTTP 服务，再尝试无头浏览器。

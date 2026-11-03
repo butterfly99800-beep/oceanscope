@@ -1,3 +1,4 @@
+import { queryShanghaiLoops } from "./loop-schedules";
 import type { Port } from "@prisma/client";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -239,6 +240,13 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
       httpFailure = error instanceof Error ? error.message.split("\n")[0] : "OOCL_HTTP_FAILED";
       if (/RATE_LIMITED|HTTP 429/.test(httpFailure)) return { source: "OOCL_LIVE", schedules: [], warnings: [httpFailure], durationMs: Date.now() - started, fromCache: false };
       if (process.env.SCHEDULE_DEBUG === "true") console.info("OOCL HTTP fallback reason", httpFailure);
+    }
+    const destination = input.destinationPort.locode;
+    if (canonicalPortCode(input.originPort.locode) === "CNSHA" && (destination === "USLAX" || destination === "USLGB")) {
+      const to = input.dateTo?.slice(0,10) || new Date(new Date(input.departureDate).getTime()+28*86400000).toISOString().slice(0,10);
+      const published = await queryShanghaiLoops(destination, input.departureDate.slice(0,10), to);
+      if (published.schedules.length) return { source:"OOCL_LIVE", ...published, durationMs:Date.now()-started, fromCache:false };
+      if (published.warnings.length) httpFailure += "; " + published.warnings.join(", ");
     }
     const first = await OOCLSingleAttempt.searchSchedule(input);
     first.durationMs = Date.now() - started;
