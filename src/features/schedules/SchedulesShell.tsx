@@ -39,6 +39,7 @@ const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CM
 
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条`;
+  if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
   if (provider.warnings.some(w => /INLAND_UNSUPPORTED/.test(w))) return "内陆段暂未支持";
   if (provider.warnings.some(w => /PORT_NOT_FOUND|Geo ID could not be resolved/.test(w))) return "公开入口未匹配到地点";
   if (provider.warnings.some(w => /RESULT_PORT_MISMATCH|Official result port does not match/.test(w))) return "官网返回其他港口";

@@ -11,11 +11,11 @@ export function matchesSourcePort(value: string | undefined, port: SourcePort) {
     .some((name) => name?.trim().toLowerCase() === normalized);
 }
 
-// Legacy project code CNNBO and official carrier code CNNGB both identify Ningbo.
+// Carrier schedule systems use CNSHA for the Shanghai seaport stored as CNSGH.
 export function samePortCode(left: string, right: string) {
   return canonicalPortCode(left) === canonicalPortCode(right);
 }
 
 export function canonicalPortCode(code: string) {
-  return ({ CNNBO: "CNNGB", CNQIN: "CNTAO" } as Record<string, string>)[code] || code;
+  return ({ CNSGH: "CNSHA", CNNBO: "CNNGB", CNQIN: "CNTAO" } as Record<string, string>)[code] || code;
 }
