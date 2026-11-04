@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveHistoryPort } from "@/features/schedules/lib/historyPorts";
 import { completeSchedulePages } from "@/features/schedules/lib/completeSchedulePages";
 import { ArrowLeft, RefreshCw, SlidersHorizontal, X } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -204,9 +205,37 @@ export function SchedulesShell() {
     }
   };
 
-  const runSearch = async (nextCriteria = criteria, refresh = false) => {
+  const restoreRecentSearch = async (search: RecentScheduleSearch) => {
+    setIsLoading(true);
+    setErrors({});
+    setQueryError("");
+    try {
+      const [origin, destination] = await Promise.all([
+        search.originCoscoCity ? undefined : resolveHistoryPort(ports, search.originPortId, search.originName),
+        search.destinationCoscoCity ? undefined : resolveHistoryPort(ports, search.destinationPortId, search.destinationName),
+      ]);
+      if ((!origin && !search.originCoscoCity) || (!destination && !search.destinationCoscoCity)) {
+        setQueryError("历史地点未能匹配，请重新选择起运地和目的地。");
+        return;
+      }
+      const resolvedPorts = [...new Map([...ports, ...[origin, destination].filter((p): p is PortOption => Boolean(p))].map(p => [p.id, p])).values()];
+      const next = { ...createInitialCriteria(), originPortId: origin?.id ?? search.originPortId,
+        destinationPortId: destination?.id ?? search.destinationPortId,
+        originCoscoCity: search.originCoscoCity, destinationCoscoCity: search.destinationCoscoCity };
+      setPorts(resolvedPorts);
+      setCriteria(next);
+      setFilters(initialFilters);
+      await runSearch(next, false, resolvedPorts);
+    } catch {
+      setQueryError("地点加载失败，请稍后重试。");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const runSearch = async (nextCriteria = criteria, refresh = false, searchPorts = ports) => {
     ++pollTokenRef.current;
-    const nextErrors = validate(nextCriteria, ports);
+    const nextErrors = validate(nextCriteria, searchPorts);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     setIsLoading(true);
@@ -216,8 +245,8 @@ export function SchedulesShell() {
     try {
       const { dateFrom, dateTo } = dateWindow(nextCriteria);
       const params = new URLSearchParams({
-        origin: nextCriteria.originCoscoCity ? dbPortValueForCosco(ports, nextCriteria.originCoscoCity) : apiPortValue(ports, nextCriteria.originPortId),
-        destination: nextCriteria.destinationCoscoCity ? dbPortValueForCosco(ports, nextCriteria.destinationCoscoCity) : apiPortValue(ports, nextCriteria.destinationPortId),
+        origin: nextCriteria.originCoscoCity ? dbPortValueForCosco(searchPorts, nextCriteria.originCoscoCity) : apiPortValue(searchPorts, nextCriteria.originPortId),
+        destination: nextCriteria.destinationCoscoCity ? dbPortValueForCosco(searchPorts, nextCriteria.destinationCoscoCity) : apiPortValue(searchPorts, nextCriteria.destinationPortId),
         dateFrom,
         dateTo,
         pageSize: "100",
@@ -251,11 +280,11 @@ export function SchedulesShell() {
       } else {
         setIsStreaming(false);
       }
-      const originStored = nextCriteria.originCoscoCity ? dbPortValueForCosco(ports, nextCriteria.originCoscoCity) : apiPortValue(ports, nextCriteria.originPortId);
-      const destinationStored = nextCriteria.destinationCoscoCity ? dbPortValueForCosco(ports, nextCriteria.destinationCoscoCity) : apiPortValue(ports, nextCriteria.destinationPortId);
-      const originName = nextCriteria.originCoscoCity?.name || findPort(ports, nextCriteria.originPortId)?.name;
-      const destinationName = nextCriteria.destinationCoscoCity?.name || findPort(ports, nextCriteria.destinationPortId)?.name;
-      const nextRecent = saveRecentScheduleSearch({ id: `rs-${Date.now()}`, originPortId: originStored, destinationPortId: destinationStored, originName, destinationName, departureDate: nextCriteria.departureDate, directOnly: nextCriteria.directOnly, searchedAt: new Date().toISOString() }, []);
+      const originStored = nextCriteria.originCoscoCity ? dbPortValueForCosco(searchPorts, nextCriteria.originCoscoCity) : apiPortValue(searchPorts, nextCriteria.originPortId);
+      const destinationStored = nextCriteria.destinationCoscoCity ? dbPortValueForCosco(searchPorts, nextCriteria.destinationCoscoCity) : apiPortValue(searchPorts, nextCriteria.destinationPortId);
+      const originName = nextCriteria.originCoscoCity?.name || findPort(searchPorts, nextCriteria.originPortId)?.name;
+      const destinationName = nextCriteria.destinationCoscoCity?.name || findPort(searchPorts, nextCriteria.destinationPortId)?.name;
+      const nextRecent = saveRecentScheduleSearch({ id: `rs-${Date.now()}`, originPortId: originStored, destinationPortId: destinationStored, originName, destinationName, originCoscoCity: nextCriteria.originCoscoCity, destinationCoscoCity: nextCriteria.destinationCoscoCity, departureDate: nextCriteria.departureDate, directOnly: nextCriteria.directOnly, searchedAt: new Date().toISOString() }, []);
       setRecentSearches(nextRecent);
     } catch {
       setQueryError("船期查询暂时不可用，请稍后重试");
@@ -303,7 +332,8 @@ export function SchedulesShell() {
       {!hasSearched ? (
         <>
           <ScheduleSearchForm criteria={criteria} ports={ports} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={() => void runSearch()} />
-          <RecentScheduleSearches searches={recentSearches} ports={ports} onSelect={(search) => { const next = { ...createInitialCriteria(), originPortId: search.originPortId, destinationPortId: search.destinationPortId }; setCriteria(next); setFilters(initialFilters); void runSearch(next); }} />
+          {queryError ? <div role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{queryError}</div> : null}
+          <RecentScheduleSearches searches={recentSearches} ports={ports} disabled={isLoading} onSelect={(search) => { void restoreRecentSearch(search); }} />
           <section className="mt-6 grid gap-4 md:grid-cols-3">
             <Info title="表格式船期结果" text="默认以承运人官网类似表格展示，便于放下更多字段。" />
             <Info title="真实字段优先" text="仅展示接口返回或数据库保存的字段，不补造准班率等推断信息。" />

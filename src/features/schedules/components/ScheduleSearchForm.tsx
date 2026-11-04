@@ -1,11 +1,12 @@
 ﻿"use client";
 
 import { ArrowLeftRight, RefreshCw, Search } from "lucide-react";
+import { findHistoryPort } from "@/features/schedules/lib/historyPorts";
 import { PortAutocomplete } from "@/features/schedules/components/PortAutocomplete";
 import type { PortOption, ScheduleSearchCriteria } from "@/features/schedules/types";
 
 function labelFor(ports: PortOption[], id: string) {
-  const port = ports.find((item) => item.id === id);
+  const port = findHistoryPort(ports, id);
   return port ? `${port.name}, ${port.country}` : id;
 }
 

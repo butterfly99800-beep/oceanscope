@@ -108,6 +108,8 @@ export interface ScheduleFilterState {
 }
 
 export interface RecentScheduleSearch {
+  originCoscoCity?: CoscoCitySelection;
+  destinationCoscoCity?: CoscoCitySelection;
   originName?: string;
   destinationName?: string;
   id: string;
