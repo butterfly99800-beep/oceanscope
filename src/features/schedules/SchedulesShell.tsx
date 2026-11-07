@@ -39,13 +39,14 @@ import type { InlandRailOption, AlternateLoadingOption } from "@/features/cosco-
 type ProviderFetchStatus = { alternateLoading?: AlternateLoadingOption[]; inlandRail?: InlandRailOption[]; code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
 type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: number }; done: boolean; providers?: ProviderFetchStatus[] };
 
-const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE", EMC: "EVERGREEN", YML: "YANG MING", HMM: "HMM", KMTC: "KMTC", PIL: "PIL", SITC: "SITC" };
+const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE", EMC: "EVERGREEN", YML: "YANG MING", HMM: "HMM", KMTC: "KMTC", PIL: "PIL", SITC: "SITC", ZIM: "ZIM" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");
   if (provider.inlandRail?.length) return [provider.resultCount ? provider.resultCount + " 条完整船期" : "", provider.inlandRail.length + " 条含铁路段"].filter(Boolean).join("，");
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条`;
   if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
+  if (provider.warnings.some(w => /PUBLICATION_UNSUPPORTED/.test(w))) return "公开表暂未覆盖";
   if (provider.warnings.some(w => /INLAND_UNSUPPORTED/.test(w))) return "内陆段暂未支持";
   if (provider.warnings.some(w => /PORT_NOT_FOUND|Geo ID could not be resolved/.test(w))) return "公开入口未匹配到地点";
   if (provider.warnings.some(w => /RESULT_PORT_MISMATCH|Official result port does not match/.test(w))) return "官网返回其他港口";

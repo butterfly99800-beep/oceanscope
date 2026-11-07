@@ -156,6 +156,7 @@ enum ScheduleDataSource {
   KMTC_LIVE_QUERY
   PIL_LIVE_QUERY
   SITC_LIVE_QUERY
+  ZIM_LIVE_QUERY
 }
 
 enum ScheduleFetchJobSource {

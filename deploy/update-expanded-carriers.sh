@@ -27,6 +27,7 @@ runuser -u oceanscope -- git -C "$release" remote set-url origin https://github.
 set -a
 source /etc/oceanscope/oceanscope.env
 set +a
+command -v "${ZIM_PDFTOTEXT_PATH:-pdftotext}" >/dev/null || { echo "ZIM official PDF requires poppler-utils (pdftotext); service untouched."; exit 1; }
 export PATH=/opt/oceanscope/node/bin:$PATH
 # Read only the dist-dir setting; never display service environment or secrets.
 service_dist=$(systemctl show oceanscope.service -p Environment --value | python3 -c 'import shlex,sys; print(next((s.split("=",1)[1] for s in shlex.split(sys.stdin.read()) if s.startswith("OCEANSCOPE_DIST_DIR=")),""))')

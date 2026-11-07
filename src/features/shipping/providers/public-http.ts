@@ -38,7 +38,7 @@ export function publicProvider(code: string, pageUrl: string, query: (context: A
     catch (error) {
       const reason = error instanceof Error ? error.message.split("\n")[0] : "QUERY_FAILED";
       // Missing official locations and malformed data are not solved by changing transport.
-      if (/PORT_NOT_FOUND|RESPONSE_INVALID/.test(reason)) warnings.push(`${code}_${reason}`);
+      if (/PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESPONSE_INVALID/.test(reason)) warnings.push(`${code}_${reason}`);
       else {
         const browser = await launchPublicBrowser({ channel: "msedge" }).catch(() => null);
         if (!browser) warnings.push(`${code}_${reason}`);

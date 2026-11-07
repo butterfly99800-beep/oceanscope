@@ -22,16 +22,19 @@ const result = spawnSync(process.execPath, [require.resolve('prisma/build/index.
   cwd: root, encoding: 'utf8', env: { ...process.env, DATABASE_URL: 'mysql://unused:unused@127.0.0.1:1/unused', CHECKPOINT_DISABLE: '1' },
 });
 assert.equal(result.status, 0, result.stderr);
-const baselineOutput = result.stdout.replace(/\r\n/g, '\n').replace(/, '(?:ONE|EMC|YML|HMM|KMTC|PIL|SITC)_LIVE_QUERY'/g, '').replace(/^.*`routingKey` VARCHAR\(64\).*\n/gm, '').replace('`sailingschedule_routing_identity_key`', '`sailingschedule_carrierId_vesselName_voyageNumber_originPort_key`').replace(', `routingKey`)', ')');
+const baselineOutput = result.stdout.replace(/\r\n/g, '\n').replace(/, '(?:ONE|EMC|YML|HMM|KMTC|PIL|SITC|ZIM)_LIVE_QUERY'/g, '').replace(/^.*`routingKey` VARCHAR\(64\).*\n/gm, '').replace('`sailingschedule_routing_identity_key`', '`sailingschedule_carrierId_vesselName_voyageNumber_originPort_key`').replace(', `routingKey`)', ')');
 assert.equal(baselineOutput.trim(), sql.replace(/\r\n/g, '\n').trim());
 console.log('PASS: 17 lowercase tables, unique constraints, schema-generated baseline, unchanged archived migration bytes');
 
 const extension = fs.readFileSync(path.join(root, 'prisma/migrations/20261030000000_add_one_schedule_source/migration.sql'), 'utf8');
 const currentSource = result.stdout.split('\n').find(line => line.includes("\`source\` ENUM('SEED'")).trim().replace(/,$/, ';');
-assert(extension.includes('ALTER TABLE \x60sailingschedule\x60 MODIFY ' + currentSource.replace(/, '(?:EMC|YML|HMM|KMTC|PIL|SITC)_LIVE_QUERY'/g, '')));
+assert(extension.includes('ALTER TABLE \x60sailingschedule\x60 MODIFY ' + currentSource.replace(/, '(?:EMC|YML|HMM|KMTC|PIL|SITC|ZIM)_LIVE_QUERY'/g, '')));
 const expanded = fs.readFileSync(path.join(root, 'prisma/migrations/20261107000000_add_public_schedule_carriers/migration.sql'), 'utf8');
-assert(expanded.replace(/,\s*/g, ',').includes(('ALTER TABLE `sailingschedule` MODIFY '+currentSource).replace(/,\s*/g, ',')));
+assert(expanded.replace(/,\s*/g, ',').includes(('ALTER TABLE `sailingschedule` MODIFY '+currentSource.replace(", 'ZIM_LIVE_QUERY'",'')).replace(/,\s*/g, ',')));
 assert.equal((expanded.match(/ALTER TABLE/g)||[]).length,1);
 assert(!/DROP|TRUNCATE|DELETE|UPDATE|INSERT/.test(expanded));
 assert.equal((extension.match(/ALTER TABLE/g) || []).length, 1);
 console.log('PASS: ONE forward migration preserves all old enum values and defaults');
+
+const zimExtension=fs.readFileSync(path.join(root,'prisma/migrations/20261107010000_add_zim_schedule_source/migration.sql'),'utf8');
+assert(zimExtension.replace(/,\s*/g,',').includes(('ALTER TABLE `sailingschedule` MODIFY '+currentSource).replace(/,\s*/g,',')));

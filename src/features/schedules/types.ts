@@ -15,7 +15,7 @@ export interface CoscoCitySelection {
 
 export interface PortOption {
   id: string;
-  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY" | "EMC_LIVE_QUERY" | "YML_LIVE_QUERY" | "HMM_LIVE_QUERY" | "KMTC_LIVE_QUERY" | "PIL_LIVE_QUERY" | "SITC_LIVE_QUERY";
+  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY" | "EMC_LIVE_QUERY" | "YML_LIVE_QUERY" | "HMM_LIVE_QUERY" | "KMTC_LIVE_QUERY" | "PIL_LIVE_QUERY" | "SITC_LIVE_QUERY" | "ZIM_LIVE_QUERY";
   name: string;
   localName: string;
   country: string;
@@ -59,7 +59,7 @@ export interface ScheduleTransitPort {
 
 export interface SailingSchedule {
   id: string;
-  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY" | "EMC_LIVE_QUERY" | "YML_LIVE_QUERY" | "HMM_LIVE_QUERY" | "KMTC_LIVE_QUERY" | "PIL_LIVE_QUERY" | "SITC_LIVE_QUERY";
+  source?: "SEED" | "MANUAL" | "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY" | "EMC_LIVE_QUERY" | "YML_LIVE_QUERY" | "HMM_LIVE_QUERY" | "KMTC_LIVE_QUERY" | "PIL_LIVE_QUERY" | "SITC_LIVE_QUERY" | "ZIM_LIVE_QUERY";
   carrier: string;
   carrierCode: string;
   serviceName: string | null;
