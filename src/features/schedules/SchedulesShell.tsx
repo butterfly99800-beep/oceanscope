@@ -1,5 +1,6 @@
 "use client";
 
+import { ScheduleOverview } from "@/features/schedules/components/ScheduleOverview";
 import { resolveHistoryPort } from "@/features/schedules/lib/historyPorts";
 import { completeSchedulePages } from "@/features/schedules/lib/completeSchedulePages";
 import { ArrowLeft, RefreshCw, SlidersHorizontal, X } from "lucide-react";
@@ -38,7 +39,7 @@ import type { InlandRailOption, AlternateLoadingOption } from "@/features/cosco-
 type ProviderFetchStatus = { alternateLoading?: AlternateLoadingOption[]; inlandRail?: InlandRailOption[]; code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
 type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: number }; done: boolean; providers?: ProviderFetchStatus[] };
 
-const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE" };
+const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE", EMC: "EVERGREEN", YML: "YANG MING", HMM: "HMM", KMTC: "KMTC", PIL: "PIL", SITC: "SITC" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");
@@ -388,6 +389,7 @@ export function SchedulesShell() {
                   </table></div></details> : [])}
                 {providerStatuses.some(provider => provider.code === "OOCL" && provider.warnings.some(w => w.startsWith("OOCL_PDF_SOURCE"))) && <p className="mt-2 text-xs text-slate-500">OOCL 来源为官网分航线船期表，仅展示可核对的同船挂靠方案。</p>}
                 {providerStatuses.flatMap(provider => provider.warnings.filter(warning => warning.startsWith("MSC_DATE_ADJUSTED:")).map(warning => <p key={`${provider.code}-${warning}`} className="mt-2 text-xs text-amber-800">{warning.replace("MSC_DATE_ADJUSTED: ", "MSC：")}</p>))}
+                {providerStatuses.some(provider => provider.warnings.some(w => w.includes("SITC_DIRECT_ONLY"))) && <p className="mt-2 text-xs text-slate-500">SITC 当前查询范围：官网直航船期。</p>}
                 {providerStatuses.filter(provider => provider.status === "success" && provider.warnings.some(warning => /TIMEOUT|DETAIL_FAILED|PARSE_INCOMPLETE|OOCL_PDF_HTTP_|OOCL_PDF_READER_FAILED|OOCL_PDF_RESPONSE_INVALID/.test(warning))).map(provider => <p key={`partial-${provider.code}`} className="mt-2 text-xs text-amber-800">{carrierLabels[provider.code] || provider.code}：已显示获取到的结果，部分方案未能完成获取，可稍后重新查询。</p>)}
                 {providerStatuses.some((provider) => provider.warnings.some((warning) => /CMA_ACCESS_BLOCKED/.test(warning))) ? <p className="mt-2 text-xs text-amber-800">CMA 官网限制当前连接访问，暂未返回船期；该限制页面没有可操作的验证码。</p> : null}
                 {providerStatuses.some((provider) => provider.warnings.some((warning) => /CAPTCHA_REQUIRED|VERIFICATION_REQUIRED/.test(warning))) ? <p className="mt-2 text-xs text-slate-500">部分船司需要官网验证，请在项目专用浏览器中完成验证。</p> : null}
@@ -397,6 +399,7 @@ export function SchedulesShell() {
               <div className="rounded-lg border border-ocean-200 bg-ocean-50 px-4 py-2 text-sm text-ocean-700">正在逐船司抓取并补全结果，已加载 {filtered.length} 条，继续加载中…</div>
             ) : null}
             <Suspense fallback={<div className="h-10 rounded bg-slate-100" />}>
+              <ScheduleOverview schedules={filtered} />
               <ScheduleControls view={view} sort={sort} onViewChange={setView} onSortChange={setSort} />
             </Suspense>
             <Suspense fallback={<div className="space-y-4"><div className="h-32 animate-pulse rounded-lg border border-slate-200 bg-white" /><div className="h-32 animate-pulse rounded-lg border border-slate-200 bg-white" /></div>}>

@@ -6,7 +6,7 @@ import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 
 export type SaveCoscoResult = { created: number; updated: number; skipped: number; skippedItems: Array<{ id: string; reason: string }> };
 
-type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY";
+type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUERY" | "MAERSK_LIVE_QUERY" | "MSC_LIVE_QUERY" | "HAPAG_LIVE_QUERY" | "ONE_LIVE_QUERY" | "EMC_LIVE_QUERY" | "YML_LIVE_QUERY" | "HMM_LIVE_QUERY" | "KMTC_LIVE_QUERY" | "PIL_LIVE_QUERY" | "SITC_LIVE_QUERY";
 
 // Old rows remain stored, but must be refreshed once before being reused as new-format data.
 const refreshedSources = new Set<string>(["MSC_LIVE_QUERY", "MAERSK_LIVE_QUERY", "HAPAG_LIVE_QUERY", "CMA_LIVE_QUERY"]);
@@ -37,7 +37,7 @@ async function findCarrier(tx: Prisma.TransactionClient, options: SaveOptions) {
   const name = options.carrierName || "COSCO SHIPPING";
   const existing = await tx.carrier.findUnique({ where: { code } });
   if (existing) return existing;
-  const countries: Record<string, string> = { COSCO: "China", OOCL: "Hong Kong, China", CMA: "France", MAERSK: "Denmark", HAPAG: "Germany", MSC: "Switzerland", ONE: "Singapore" };
+  const countries: Record<string, string> = { COSCO: "China", OOCL: "Hong Kong, China", CMA: "France", MAERSK: "Denmark", HAPAG: "Germany", MSC: "Switzerland", ONE: "Singapore", EMC: "Taiwan, China", YML: "Taiwan, China", HMM: "South Korea", KMTC: "South Korea", PIL: "Singapore", SITC: "China" };
   return tx.carrier.create({ data: { name, code, country: countries[code] || "", status: "ACTIVE" } });
 }
 
@@ -49,6 +49,10 @@ async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId:
   void destinationPortId;
   void etd;
   void eta;
+}
+
+function preservesRouting(item: CoscoSchedulePreview, source: LiveScheduleSource) {
+  return item.rawText.startsWith('{"officialLegs":') || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY"].includes(source);
 }
 
 function createScheduleData(item: CoscoSchedulePreview, carrierId: string, originPortId: string, destinationPortId: string, etd: Date, eta: Date, source: LiveScheduleSource): Prisma.SailingScheduleUncheckedCreateInput {
@@ -84,7 +88,7 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     fetchedAt: new Date(),
     rawSourceData: item.rawText,
     sourceReference: ((refreshedSources.has(source) ? formatPrefix : "") + item.id).slice(0, 160),
-    routingKey: item.rawText.startsWith('{"officialLegs":') ? createHash("sha256").update(item.id).digest("hex") : "",
+    routingKey: preservesRouting(item, source) ? createHash("sha256").update(item.id).digest("hex") : "",
   };
 }
 
@@ -126,7 +130,7 @@ export async function saveCoscoSchedules(schedules: CoscoSchedulePreview[], opti
           destinationPortId: destinationPort.id,
           OR: [
             { sourceReference: data.sourceReference },
-            ...(item.rawText.startsWith('{"officialLegs":') ? [] : [{ vesselName: data.vesselName, voyageNumber: data.voyageNumber, originPortId: originPort.id, destinationPortId: destinationPort.id, etd }]),
+            ...(preservesRouting(item, source) ? [] : [{ vesselName: data.vesselName, voyageNumber: data.voyageNumber, originPortId: originPort.id, destinationPortId: destinationPort.id, etd }]),
           ],
         },
       });

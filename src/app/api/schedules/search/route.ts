@@ -16,6 +16,13 @@ import { MSCProvider } from "@/features/shipping/providers/msc/provider";
 
 import { ONEProvider } from "@/features/shipping/providers/one/provider";
 
+import { EMCProvider } from "@/features/shipping/providers/emc/provider";
+import { YMLProvider } from "@/features/shipping/providers/yml/provider";
+import { HMMProvider } from "@/features/shipping/providers/hmm/provider";
+import { KMTCProvider } from "@/features/shipping/providers/kmtc/provider";
+import { PILProvider } from "@/features/shipping/providers/pil/provider";
+import { SITCProvider } from "@/features/shipping/providers/sitc/provider";
+
 const statusMap: Record<string, ScheduleStatus> = { "正常": "NORMAL", NORMAL: "NORMAL", "预计延误": "EXPECTED_DELAY", EXPECTED_DELAY: "EXPECTED_DELAY", "已延误": "DELAYED", DELAYED: "DELAYED", "即将截关": "CUTOFF_SOON", CUTOFF_SOON: "CUTOFF_SOON", "已取消": "CANCELLED", CANCELLED: "CANCELLED" };
 // 记录每个(起运|目的|日期)键的实时抓取状态，用于前端轮询补全。
 // done=false 表示仍有船司在后台抓取，前端应继续轮询；done=true 表示本轮抓取已结束。
@@ -37,10 +44,22 @@ const liveSources: ScheduleDataSource[] = [
   ScheduleDataSource.HAPAG_LIVE_QUERY,
   ScheduleDataSource.MSC_LIVE_QUERY,
   ScheduleDataSource.ONE_LIVE_QUERY,
+  ScheduleDataSource.EMC_LIVE_QUERY,
+  ScheduleDataSource.YML_LIVE_QUERY,
+  ScheduleDataSource.HMM_LIVE_QUERY,
+  ScheduleDataSource.KMTC_LIVE_QUERY,
+  ScheduleDataSource.PIL_LIVE_QUERY,
+  ScheduleDataSource.SITC_LIVE_QUERY,
 ];
-const providers = [COSCOProvider, OOCLProvider, CMAProvider, MAERSKProvider, HAPAGProvider, MSCProvider, ONEProvider] as const;
+const providers = [COSCOProvider, OOCLProvider, CMAProvider, MAERSKProvider, HAPAGProvider, MSCProvider, ONEProvider, EMCProvider, YMLProvider, HMMProvider, KMTCProvider, PILProvider, SITCProvider] as const;
 
 function sourceForProvider(code: string) {
+  if (code === "EMC") return ScheduleDataSource.EMC_LIVE_QUERY;
+  if (code === "YML") return ScheduleDataSource.YML_LIVE_QUERY;
+  if (code === "HMM") return ScheduleDataSource.HMM_LIVE_QUERY;
+  if (code === "KMTC") return ScheduleDataSource.KMTC_LIVE_QUERY;
+  if (code === "PIL") return ScheduleDataSource.PIL_LIVE_QUERY;
+  if (code === "SITC") return ScheduleDataSource.SITC_LIVE_QUERY;
   if (code === "OOCL") return ScheduleDataSource.OOCL_LIVE_QUERY;
   if (code === "CMA") return ScheduleDataSource.CMA_LIVE_QUERY;
   if (code === "MAERSK") return ScheduleDataSource.MAERSK_LIVE_QUERY;
@@ -51,6 +70,12 @@ function sourceForProvider(code: string) {
 }
 
 function carrierNameForProvider(code: string) {
+  if (code === "EMC") return "EVERGREEN";
+  if (code === "YML") return "YANG MING";
+  if (code === "HMM") return "HMM";
+  if (code === "KMTC") return "KMTC";
+  if (code === "PIL") return "PIL";
+  if (code === "SITC") return "SITC";
   if (code === "OOCL") return "OOCL";
   if (code === "CMA") return "CMA CGM";
   if (code === "MAERSK") return "MAERSK";
@@ -65,7 +90,7 @@ function providerStatus(state: LiveFetchState, code: string) {
 }
 
 function unavailable(warnings: string[]) {
-  return warnings.some((warning) => /AUTH_REQUIRED|NOT_CONFIGURED|ACCESS_BLOCKED|RATE_LIMITED|CAPTCHA_REQUIRED|VERIFICATION_REQUIRED|BROWSER_UNAVAILABLE|PUBLIC_PAGE_FAILED|API responded [45]|QUERY_FAILED|query failed|fetch failed|_TIMEOUT/i.test(warning));
+  return warnings.some((warning) => /PORT_NOT_FOUND|RESPONSE_INVALID|AUTH_REQUIRED|NOT_CONFIGURED|ACCESS_BLOCKED|RATE_LIMITED|CAPTCHA_REQUIRED|VERIFICATION_REQUIRED|BROWSER_UNAVAILABLE|PUBLIC_PAGE_FAILED|API responded [45]|QUERY_FAILED|query failed|fetch failed|_TIMEOUT/i.test(warning));
 }
 
 function cacheMinutes() {
@@ -193,7 +218,7 @@ function latestScheduleSnapshots<T extends { id: string; source: ScheduleDataSou
   const latest = new Map<string, T>();
   const identity = (row: T) => row.vesselName && row.voyageNumber
     ? JSON.stringify([row.source, row.originPortId, row.destinationPortId, row.vesselName, row.voyageNumber, row.serviceName, row.frequency,
-      typeof row.rawSourceData === "string" && row.rawSourceData.startsWith('{"officialLegs":') ? row.sourceReference : null]) : row.id;
+      ((typeof row.rawSourceData === "string" && row.rawSourceData.startsWith('{"officialLegs":')) || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY"].includes(row.source)) ? row.sourceReference : null]) : row.id;
   for (const row of rows) {
     const key = identity(row);
     const previous = latest.get(key);
