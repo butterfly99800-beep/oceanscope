@@ -40,7 +40,6 @@ backup_dir=$base/backups
 install -d -m 700 "$backup_dir"
 credentials=$(mktemp)
 backup="$backup_dir/pre-$sha-$(date +%Y%m%d%H%M%S).sql"
-switched=0
 cleanup() { rm -f -- "$credentials"; }
 trap cleanup EXIT
 python3 - "$credentials" <<'PY'
@@ -62,7 +61,7 @@ done
 link="$base/.current-$sha-$$"
 ln -s "$release" "$link"
 mv -Tf "$link" "$current"
-if systemctl restart oceanscope.service && curl -fsS --retry 8 --retry-all-errors --retry-delay 2 --max-time 10 -o /dev/null http://127.0.0.1:3040/login; then
+if systemctl restart oceanscope.service && curl -fsS --retry 8 --retry-all-errors --retry-delay 2 --max-time 10 -o /dev/null http://127.0.0.1:3040/login && [[ $(readlink -f "/proc/$(systemctl show oceanscope.service -p MainPID --value)/cwd") == "$release" ]]; then
  echo "Published $sha; login HTTP 200. Previous release retained: $old"
  echo "Database backup retained: $backup"
 else
