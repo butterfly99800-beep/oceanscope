@@ -5,6 +5,10 @@ const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, '../src/features/shipping/providers/maersk/provider.ts'), 'utf8');
 const exportsObject = {};
 new Function('exports', 'require', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(exportsObject, name => {
+  if (name === '../routing-evidence') {
+    const sourcePort={}; new Function('exports',ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/ports/server/source-port-match.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(sourcePort);
+    const helper={}; new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/shipping/providers/routing-evidence.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(helper,()=>sourcePort); return helper;
+  }
   if (name !== '../port-clock') return {};
   const clock = {};
   const text = fs.readFileSync(path.join(__dirname, '../src/features/shipping/providers/port-clock.ts'), 'utf8');

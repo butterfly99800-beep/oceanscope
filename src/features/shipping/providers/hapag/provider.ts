@@ -1,3 +1,4 @@
+import { classifySeaRouting } from "../routing-evidence";
 import { portClock } from "../port-clock";
 import type { Port } from "@prisma/client";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -98,7 +99,7 @@ function candidateItems(payload: unknown): unknown[] {
   return [];
 }
 
-function mapRoute(item: unknown, index: number): CoscoSchedulePreview | null {
+export function mapRoute(item: unknown, index: number): CoscoSchedulePreview | null {
   const route = object(item);
   if (!route) return null;
   const legs = array(valueAt(route, ["legs", "routeLegs", "transportLegs", "segments"])).map(object).filter(Boolean) as JsonObject[];
@@ -112,6 +113,7 @@ function mapRoute(item: unknown, index: number): CoscoSchedulePreview | null {
   const eta = portClock(etaRaw)?.iso;
   if (!etd || !eta) return null;
 
+  const verified = classifySeaRouting(legs.map(leg => ({sea:leg.modeOfTransport === "VESSEL",from:locationCode(leg.departureLocation),to:locationCode(leg.arrivalLocation),vessel:stringAt(object(leg.vesselDetails),["name"])})),locationCode(route.placeOfReceipt) || "",locationCode(route.placeOfDelivery) || "");
   const explicitStops = numberAt(route, ["numberOfTransshipments", "transshipmentCount", "stopCount"]);
   const explicitDirect = booleanAt(route, ["direct", "isDirect"]);
   const transitLocations = array(valueAt(route, ["transshipmentLocations", "transitPorts"]))
@@ -137,8 +139,8 @@ function mapRoute(item: unknown, index: number): CoscoSchedulePreview | null {
     etdTimeKnown: portClock(etdRaw)?.timeKnown,
     etaTimeKnown: portClock(etaRaw)?.timeKnown,
     transitDays: numberAt(route, ["transitTimeDays", "transitTimeInDays", "transitDays", "durationDays"]),
-    direct: explicitDirect,
-    stopCount: explicitStops,
+    direct: explicitDirect ?? verified.direct,
+    stopCount: explicitStops ?? verified.stopCount,
     transitPorts: transitLocations,
     cargoNature: null,
     cutOffTime: isoAt(route, ["cargoCutoff", "cutOffTime", "cutoffDateTime"]) || isoAt(first, ["cargoCutoff", "cutOffTime", "cutoffDateTime"]),

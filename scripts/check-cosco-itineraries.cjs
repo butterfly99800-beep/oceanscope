@@ -21,3 +21,5 @@ assert.equal(map([first,{...second,pol:'Ningbo'}]).length,0,'Do not stitch disco
 assert.equal(map([first,{...second,etd:'2026-11-10 12:00'}]).length,0,'Reject impossible connection order');
 assert.equal(map([{...first,pod:'Vancouver'}]).length,1,'Direct route preserved');
 console.log('PASS: real-shaped COSCO legs, final ETA, distinct onward voyages, orphan/disconnected/invalid sequences, direct route');
+
+assert.equal(map([{...first,pod:'Vancouver'}])[0].direct,true);assert.equal(map([{...first,pod:'Vancouver',deList1:undefined}])[0].direct,null);

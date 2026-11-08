@@ -5,7 +5,7 @@ import { publicProvider, publishedDate, responseText, scheduleId } from "../publ
 export const HMM_PAGE = "https://www.hmm21.com/e-service/general/schedule/ScheduleMain.do";
 const BASE = "https://www.hmm21.com/e-service/general/schedule/";
 type Leg = { orgLocCd?: string; destnLocCd?: string; orgLocNm?: string; destnLocNm?: string; orgFcltyNm?: string; destnFcltyNm?: string; trsPtnModeCd?: string; arvlStDt?: string; dpartFnshDt?: string; vslNm?: string; cssmObVoyNo?: string; vslSvcLoopCd?: string };
-type Route = { porLocCd?: string; pvyLocCd?: string; porLocNm?: string; pvyLocNm?: string; transit?: Leg[]; totTrstmHrs?: number; portCtofDt?: string; sigCtofDt?: string };
+type Route = { fstTrshpPortCd?: string; scndTrshpPortCd?: string; thrdTrshpPortCd?: string; porLocCd?: string; pvyLocCd?: string; porLocNm?: string; pvyLocNm?: string; transit?: Leg[]; totTrstmHrs?: number; portCtofDt?: string; sigCtofDt?: string };
 export function mapHmm(payload: unknown, origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
   const data = payload as { grmData?: Route[]; RTN_DATA?: { grmData?: Route[] } };
   const rows = data?.grmData ?? data?.RTN_DATA?.grmData;
@@ -19,10 +19,11 @@ export function mapHmm(payload: unknown, origin: string, destination: string, fr
     if (!etd || !eta || etd >= eta || etd.slice(0, 10) < from || etd.slice(0, 10) > to || !row.porLocNm || !row.pvyLocNm) continue;
     const sea = legs.filter(leg => ["MM", "FF"].includes(leg.trsPtnModeCd ?? ""));
     const onlySea = sea.length === legs.length;
+    const publishedTransfers = [row.fstTrshpPortCd, row.scndTrshpPortCd, row.thrdTrshpPortCd].filter((v): v is string => typeof v === "string" && /^[A-Z]{2}[A-Z0-9]{3}$/.test(v));
     schedules.push({ id: scheduleId("HMM", [row.porLocCd, row.pvyLocCd, legs]), carrierName: "HMM", originText: row.porLocNm, destinationText: row.pvyLocNm, originLocode: row.porLocCd, destinationLocode: row.pvyLocCd,
       etd, eta, etdTimeKnown: true, etaTimeKnown: true, vesselName: sea[0]?.vslNm || null, voyageNumber: sea[0]?.cssmObVoyNo || null, serviceName: sea[0]?.vslSvcLoopCd || null, routeName: null,
       transitDays: typeof row.totTrstmHrs === "number" && row.totTrstmHrs > 0 && Number.isInteger(row.totTrstmHrs / 24) ? row.totTrstmHrs / 24 : null,
-      direct: onlySea ? sea.length === 1 : null, stopCount: onlySea ? sea.length - 1 : null, transitPorts: sea.slice(0, -1).map(leg => leg.destnLocNm).filter((name): name is string => Boolean(name)),
+      direct: publishedTransfers.length ? false : onlySea ? sea.length === 1 : null, stopCount: publishedTransfers.length || (onlySea ? sea.length - 1 : null), transitPorts: sea.slice(0, -1).map(leg => leg.destnLocNm).filter((name): name is string => Boolean(name)),
       originFacilityName: first.orgFcltyNm || null, destinationFacilityName: last.destnFcltyNm || null, cutOffTime: publishedDate(row.portCtofDt), siCutOffTime: publishedDate(row.sigCtofDt), availableTime: null,
       rawText: JSON.stringify({ sourceUrl: BASE + "selectPointToPointList.do", officialLegs: legs, row, timeBasis: "official port-local time; offset not supplied" }) });
   }

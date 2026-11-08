@@ -80,7 +80,8 @@ export function parseLoop(text:string, loop:string, origin:LoopPort, destination
       for(let j=0;j<calls.length;j++){const a=calls[j];if(city(a.port)!==originName||a.departure<from||a.departure>to)continue;
         const onward=calls.slice(j+1);const nextOrigin=onward.findIndex(x=>!x.port||city(x.port)===originName);const b=(nextOrigin>=0?onward.slice(0,nextOrigin):onward).find(x=>city(x.port)===destinationName);if(!b||b.arrival<=a.departure)continue;
         const raw=`POL:\t${a.port}\nFinal Destination Hub:\t${b.port}\nVessel/Voyage:\t${vv[i]}\nVessel Name:\t${names[i]}\n${loop}\n${a.raw}\n${b.raw}\nSource: ${documentUrl(loop)}\n${stamp[0]}`;
-        rows.push({id:'oocl-loop-'+createHash('sha256').update([loop,vv[i],a.departure,...(origin.locode === "CNSHA" ? [] : [origin.locode]),destination.locode].join('|')).digest('hex'),carrierName:'OOCL',serviceName:loop,routeName:null,vesselName:names[i],voyageNumber:vv[i],originText:a.port,destinationText:b.port,originLocode:origin.locode,destinationLocode:destination.locode,etd:a.departure+'T12:00:00.000Z',eta:b.arrival+'T12:00:00.000Z',etdTimeKnown:false,etaTimeKnown:false,transitDays:null,direct:null,stopCount:null,transitPorts:[],rawText:raw});
+        // Both calls are in the same verified vessel/voyage column, with no missing rows or new rotation between them.
+        rows.push({id:'oocl-loop-'+createHash('sha256').update([loop,vv[i],a.departure,...(origin.locode === "CNSHA" ? [] : [origin.locode]),destination.locode].join('|')).digest('hex'),carrierName:'OOCL',serviceName:loop,routeName:null,vesselName:names[i],voyageNumber:vv[i],originText:a.port,destinationText:b.port,originLocode:origin.locode,destinationLocode:destination.locode,etd:a.departure+'T12:00:00.000Z',eta:b.arrival+'T12:00:00.000Z',etdTimeKnown:false,etaTimeKnown:false,transitDays:null,direct:true,stopCount:0,transitPorts:[],rawText:raw});
       }
     });
   }

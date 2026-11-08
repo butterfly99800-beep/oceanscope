@@ -13,7 +13,7 @@ Long Beach 10--11 Jan Los Angeles 08--10 Jan`;
 const shanghai = {name:'Shanghai',locode:'CNSHA'}, longBeach = {name:'Long Beach',locode:'USLGB'}, losAngeles = {name:'Los Angeles',locode:'USLAX'};
 const rows = out.parseLoop(table,'PCC1',shanghai,longBeach,'2026-12-01','2026-12-31');
 assert.equal(rows.length,1);
-assert.equal(rows[0].vesselName,'TEST A');
+assert.equal(rows[0].vesselName,'TEST A');assert.equal(rows[0].direct,true);assert.equal(rows[0].stopCount,0);
 assert.equal(rows[0].eta.slice(0,10),'2027-01-10');
 assert.equal(rows[0].etdTimeKnown,false);
 assert.equal(out.parseLoop(table,'PCC1',shanghai,losAngeles,'2026-12-01','2026-12-31').length,0);

@@ -129,7 +129,10 @@ export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: str
     const transitPorts = [...legs.slice(0, -1).map(leg => asString(leg.pod)), ...[...deList1, ...deList2]
       .map((port) => asString(port.portName) || asString(port.pod) || asString(port.pol))
       .filter(Boolean)];
-    const direct = asBoolean(item.direct) ?? asBoolean(item.isDirect) ?? (transitPorts.length ? false : null);
+    const completeSingleLeg = legs.length === 1 && asNumber(first.legSequence) === 1
+      && Array.isArray(first.deList1) && first.deList1.length === 0
+      && Array.isArray(first.deList2) && first.deList2.length === 0;
+    const direct = asBoolean(item.direct) ?? asBoolean(item.isDirect) ?? (transitPorts.length ? false : completeSingleLeg ? true : null);
     const explicitStopCount = asNumber(item.stopCount) ?? asNumber(item.transshipmentCount);
 
     schedules.push({
@@ -149,7 +152,7 @@ export function mapJsonPayloadsToCoscoSchedules(payloads: unknown[], origin: str
       etaTimeKnown: /\d{1,2}:\d{2}/.test(etaText),
       transitDays,
       direct,
-      stopCount: explicitStopCount ?? (transitPorts.length ? transitPorts.length : null),
+      stopCount: explicitStopCount ?? (transitPorts.length ? transitPorts.length : direct === true ? 0 : null),
       transitPorts,
       cargoNature,
       cutOffTime,

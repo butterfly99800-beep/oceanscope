@@ -1,3 +1,4 @@
+import { classifySeaRouting } from "../routing-evidence";
 import { canonicalPortCode, officialPortName } from "@/features/ports/server/source-port-match";
 import { portClock } from "../port-clock";
 import type { Port } from "@prisma/client";
@@ -155,6 +156,15 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
       const mid = stringValue(facility?.facilityCode);
       if (mid) transitPorts.push(mid);
     }
+    const verified = classifySeaRouting(legs.map(leg => {
+      const c = object(leg.carriage);
+      const code = (call: unknown) => {
+        const value = stringValue(object(object(object(call)?.location)?.facility)?.facilityCode)?.slice(0,5);
+        // Maersk's Los Angeles terminal uses its internal USLSA prefix.
+        return value === "USLSA" ? "USLAX" : value;
+      };
+      return {sea:c?.carriageType === "OCEAN",from:code(c?.vesselPortCallStart),to:code(c?.vesselPortCallEnd),vessel:stringValue(object(c?.vessel)?.vesselName)};
+    }),originLocode,destinationLocode);
     out.push({
       id: `maersk-${i}-${etd.iso}`,
       carrierName: "MAERSK",
@@ -171,8 +181,8 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
       etdTimeKnown: etd.timeKnown,
       etaTimeKnown: eta.timeKnown,
       transitDays: parseIsoDuration(stringValue(routing.estimatedTransitTime)),
-      direct: explicitBoolean(routing.isDirect) ?? explicitBoolean(routing.direct),
-      stopCount: typeof routing.numberOfTransshipments === "number" ? routing.numberOfTransshipments : null,
+      direct: explicitBoolean(routing.isDirect) ?? explicitBoolean(routing.direct) ?? verified.direct,
+      stopCount: typeof routing.numberOfTransshipments === "number" ? routing.numberOfTransshipments : verified.stopCount,
       transitPorts,
       rawText: JSON.stringify(routing),
     });
