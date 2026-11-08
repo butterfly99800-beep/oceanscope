@@ -22,6 +22,13 @@ async function point(context: APIRequestContext, port: PublicScheduleInput["orig
   if (!row) throw new Error(`PORT_NOT_FOUND: official location ${code}`);
   return { code, internalCode: row[1], name: row[0] };
 }
+// Classify only the displayed origin-to-discharge segment, not an omitted inland extension.
+export function evergreenDirectLeg(legs: string[][] | undefined, origin: string, destination: string): boolean | null {
+ const first = legs?.[0];
+ if (!first || first.length !== 8 || first[0] !== "1" || first[1] !== origin || first[2] !== destination) return null;
+ if (!first[5] || /intermodal|rail|truck/i.test(first[5]) || !first[6] || /^-+$/.test(first[6])) return null;
+ return true;
+}
 export function mapEvergreen(html: string, originCode: string, destinationCode: string, from: string, to: string): CoscoSchedulePreview[] {
   const $ = load(html);
   const table = $("table.ec-table-border-bottom");
@@ -52,7 +59,7 @@ export function mapEvergreen(html: string, originCode: string, destinationCode: 
     results.push({ id: scheduleId("EMC", [originCode, pod, vesselName, voyageNumber, etd, eta, rawDetail]), carrierName: "EVERGREEN", originText: clean(2), destinationText: clean(5), originLocode: originCode, destinationLocode: pod,
       vesselName, voyageNumber, serviceName: clean(4) || null, routeName: null, etd, eta, etdTimeKnown: false, etaTimeKnown: false,
       transitDays: pod === destinationCode && /^\d+$/.test(days) ? Number(days) : null,
-      direct: null, stopCount: null, transitPorts: [], originFacilityName: null, destinationFacilityName: null,
+      direct: evergreenDirectLeg(legs, clean(2), clean(5)), stopCount: evergreenDirectLeg(legs, clean(2), clean(5)) === true ? 0 : null, transitPorts: [], originFacilityName: null, destinationFacilityName: null,
       cutOffTime: emcDate(clean(3)), availableTime: null,
       rawText: JSON.stringify({ sourceUrl: ENDPOINT, officialRouting: rawDetail, officialLegs: legs, receipt: clean(1), delivery: clean(6), timeBasis: "official local dates; offset not supplied" }) });
   });
