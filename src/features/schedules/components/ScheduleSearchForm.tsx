@@ -10,10 +10,11 @@ function labelFor(ports: PortOption[], id: string) {
   return port ? `${port.name}, ${port.country}` : id;
 }
 
-export function ScheduleSearchForm({ criteria, ports, compact = false, errors, isLoading, onChange, onSubmit }: { criteria: ScheduleSearchCriteria; ports: PortOption[]; compact?: boolean; errors: Partial<Record<keyof ScheduleSearchCriteria, string>>; isLoading: boolean; onChange: (criteria: ScheduleSearchCriteria) => void; onSubmit: () => void }) {
+export function ScheduleSearchForm({ criteria, ports, compact = false, errors, isLoading, onChange, onSubmit, onPortResolved }: { criteria: ScheduleSearchCriteria; ports: PortOption[]; compact?: boolean; errors: Partial<Record<keyof ScheduleSearchCriteria, string>>; isLoading: boolean; onChange: (criteria: ScheduleSearchCriteria) => void; onSubmit: () => void; onPortResolved: (port: PortOption) => void }) {
   const originLabel = criteria.originCoscoCity?.fullName || labelFor(ports, criteria.originPortId);
   const destinationLabel = criteria.destinationCoscoCity?.fullName || labelFor(ports, criteria.destinationPortId);
   const setPort = (key: "originPortId" | "destinationPortId", port: PortOption) => {
+    onPortResolved(port);
     const coscoKey = key === "originPortId" ? "originCoscoCity" : "destinationCoscoCity";
     onChange({ ...criteria, [key]: port.id, [coscoKey]: port.coscoCity });
   };

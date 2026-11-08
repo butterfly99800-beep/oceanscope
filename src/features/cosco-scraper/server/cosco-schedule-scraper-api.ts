@@ -1,3 +1,4 @@
+import { locationMatchScore } from "@/features/schedules/lib/locationMatch";
 ﻿import { request, type APIRequestContext, type APIResponse } from "playwright";
 import type { CoscoCityOption, CoscoNetworkProbe, CoscoScheduleCriteria, CoscoScrapeResult } from "@/features/cosco-scraper/types";
 import { mapJsonPayloadsToCoscoSchedules } from "@/features/cosco-scraper/server/cosco-schedule-mapper";
@@ -189,7 +190,10 @@ export async function searchCoscoCityOptions(query: string): Promise<CoscoCityOp
         seen.add(item.uuid);
         return true;
       })
-      .slice(0, 12);
+      .map(item => ({ item, score: locationMatchScore(query, [item.name, item.fullName.split(",")[0]], [item.locode, item.cityCode]) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
+      .slice(0, 30).map(({ item }) => item);
   } finally {
     await context.dispose().catch(() => undefined);
   }

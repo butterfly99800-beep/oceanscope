@@ -333,7 +333,7 @@ export function SchedulesShell() {
 
       {!hasSearched ? (
         <>
-          <ScheduleSearchForm criteria={criteria} ports={ports} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={() => void runSearch()} />
+          <ScheduleSearchForm criteria={criteria} ports={ports} errors={errors} isLoading={isLoading} onPortResolved={(port) => setPorts(current => [...current.filter(p => p.id !== port.id), port])} onChange={setCriteria} onSubmit={() => void runSearch()} />
           {queryError ? <div role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{queryError}</div> : null}
           <RecentScheduleSearches searches={recentSearches} ports={ports} disabled={isLoading} onSelect={(search) => { void restoreRecentSearch(search); }} />
           <section className="mt-6 grid gap-4 md:grid-cols-3">
@@ -344,7 +344,7 @@ export function SchedulesShell() {
         </>
       ) : (
         <div className="space-y-5">
-          <ScheduleSearchForm compact criteria={criteria} ports={ports} errors={errors} isLoading={isLoading} onChange={setCriteria} onSubmit={() => void runSearch()} />
+          <ScheduleSearchForm compact criteria={criteria} ports={ports} errors={errors} isLoading={isLoading} onPortResolved={(port) => setPorts(current => [...current.filter(p => p.id !== port.id), port])} onChange={setCriteria} onSubmit={() => void runSearch()} />
           {queryError ? <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{queryError}</div> : null}
 
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-card">
