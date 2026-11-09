@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { ArrowLeftRight, RefreshCw, Search } from "lucide-react";
@@ -13,8 +13,8 @@ function labelFor(ports: PortOption[], id: string) {
 
 export function ScheduleSearchForm({ criteria, ports, compact = false, errors, isLoading, onChange, onSubmit, onPortResolved }: { criteria: ScheduleSearchCriteria; ports: PortOption[]; compact?: boolean; errors: Partial<Record<keyof ScheduleSearchCriteria, string>>; isLoading: boolean; onChange: (criteria: ScheduleSearchCriteria) => void; onSubmit: () => void; onPortResolved: (port: PortOption) => void }) {
   const [drafts, setDrafts] = useState<Partial<Record<"originPortId" | "destinationPortId", string>>>({});
-  const originLabel = drafts.originPortId === criteria.originPortId ? drafts.originPortId : criteria.originCoscoCity?.fullName || labelFor(ports, criteria.originPortId);
-  const destinationLabel = drafts.destinationPortId === criteria.destinationPortId ? drafts.destinationPortId : criteria.destinationCoscoCity?.fullName || labelFor(ports, criteria.destinationPortId);
+  const originLabel = drafts.originPortId === criteria.originPortId ? drafts.originPortId : (criteria.originCoscoCity ? [criteria.originCoscoCity.name, criteria.originCoscoCity.country].filter(Boolean).join(", ") : labelFor(ports, criteria.originPortId));
+  const destinationLabel = drafts.destinationPortId === criteria.destinationPortId ? drafts.destinationPortId : (criteria.destinationCoscoCity ? [criteria.destinationCoscoCity.name, criteria.destinationCoscoCity.country].filter(Boolean).join(", ") : labelFor(ports, criteria.destinationPortId));
   const setPort = (key: "originPortId" | "destinationPortId", port: PortOption) => {
     setDrafts(current => ({...current, [key]: undefined}));
     onPortResolved(port);

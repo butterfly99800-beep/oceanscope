@@ -366,7 +366,7 @@ export function SchedulesShell() {
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-card">
                 <div className="flex flex-wrap gap-2 text-xs">
                   {providerStatuses.map((provider) => (
-                    <span key={provider.code} className={`rounded-full px-3 py-1.5 font-semibold ${provider.status === "success" || provider.status === "cached" ? "bg-emerald-50 text-emerald-700" : provider.status === "fetching" || provider.status === "pending" ? "bg-ocean-50 text-ocean-700" : "bg-amber-50 text-amber-800"}`} title={provider.warnings.join("\n")}>
+                    <span key={provider.code} className={`rounded-full px-3 py-1.5 font-semibold ${provider.status === "success" || provider.status === "cached" ? "bg-emerald-50 text-emerald-700" : provider.status === "fetching" || provider.status === "pending" || (provider.status === "no_results" && providerStatusText(provider) === "未查到船期") ? "bg-ocean-50 text-ocean-700" : "bg-amber-50 text-amber-800"}`} title={provider.warnings.join("\n")}>
                       {carrierLabels[provider.code] || provider.code}：{providerStatusText(provider)}
                     </span>
                   ))}

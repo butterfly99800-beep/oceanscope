@@ -1,4 +1,4 @@
-﻿import { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jsonList, parsePagination } from "@/features/admin/server/api-utils";
 import { mapPortOption } from "@/features/schedules/server/schedule-mapper";
@@ -10,11 +10,9 @@ export async function GET(request: Request) {
   const where: Prisma.PortWhereInput = q ? {
     OR: [
       { id: q },
-      { name: { contains: q } },
+      { name: q.length < 3 ? { startsWith: q } : { contains: q } },
       { nameZh: { contains: q } },
-      { locode: { contains: q.toUpperCase() } },
-      { country: { contains: q } },
-      { region: { contains: q } },
+      ...(q.length >= 3 ? [{ locode: { contains: q.toUpperCase() } }] : []),
     ],
   } : {};
   const [ports, total] = await Promise.all([

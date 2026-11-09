@@ -12,7 +12,7 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
   const [matchedPorts, setMatchedPorts] = useState<PortOption[]>([]);
   const [resultQuery, setResultQuery] = useState("");
   const [loadingCosco, setLoadingCosco] = useState(false);
-  const rootRef = useRef<HTMLLabelElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const coscoSuggestions = useMemo<PortOption[]>(() => coscoCities.map((city) => ({
     id: `cosco:${city.uuid}`,
     name: city.name,
@@ -26,7 +26,7 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
   const suggestions = useMemo(() => {
     const candidates = [...(resultQuery === value.trim() ? coscoSuggestions : []), ...(resultQuery === value.trim() ? matchedPorts : []), ...ports];
     const seen = new Set<string>();
-    return candidates.map(port => ({port, score: locationMatchScore(value, [port.name, port.city || "", (port.localName || "").split(",")[0]], [port.code || ""])}))
+    return candidates.map(port => ({port, score: locationMatchScore(value, [port.name, (port.localName || "").split(",")[0], [port.name, port.country].filter(Boolean).join(", ")], [port.code || ""])}))
       .filter(x => x.score > 0).sort((a,b) => b.score-a.score || a.port.name.localeCompare(b.port.name))
       .filter(({port}) => { const key = (port.code || port.id).toUpperCase(); if(seen.has(key)) return false; seen.add(key); return true; })
       .slice(0,15).map(x => x.port);
@@ -69,11 +69,11 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
   }, [open, value]);
 
   return (
-    <label ref={rootRef} className="relative block">
+    <div ref={rootRef} className="relative block">
       <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
       <div className={`flex h-11 items-center gap-2 rounded-md border bg-white px-3 shadow-sm ${error ? "border-rose-300" : "border-slate-300 focus-within:border-ocean-500 focus-within:ring-4 focus-within:ring-ocean-100"}`}>
         <MapPin className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-        <input value={value} onFocus={() => setOpen(true)} onChange={(event) => { onInputChange(event.target.value); setOpen(true); setActiveIndex(0); }} onKeyDown={(event) => {
+        <input aria-label={label} value={value} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onChange={(event) => { onInputChange(event.target.value); setOpen(true); setActiveIndex(0); }} onKeyDown={(event) => {
           if (event.nativeEvent.isComposing) return;
           if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => Math.min(index + 1, Math.max(0, suggestions.length - 1))); }
           if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); }
@@ -90,11 +90,11 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
           {suggestions.length ? suggestions.map((port, index) => (
             <button key={port.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(port); setOpen(false); }} className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left ${index === activeIndex ? "bg-ocean-50" : "hover:bg-slate-50"}`}>
               <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#eaf2fb] text-[#2f68a8]"><Anchor className="h-4 w-4" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{port.name}</span><span className="block truncate text-xs text-slate-500">{[port.code, port.country].filter(Boolean).join(" · ")}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{[port.name, port.country].filter(Boolean).join(", ")}</span><span className="block truncate text-xs text-slate-500">{[port.code, /[\u3400-\u9fff]/.test(port.localName || "") ? (port.localName || "").split(",")[0] : ""].filter(Boolean).join(" · ")}</span></span>
             </button>
           )) : !loadingCosco ? <div className="px-3 py-4 text-sm text-slate-500">未找到匹配城市</div> : null}
         </div>
       ) : null}
-    </label>
+    </div>
   );
 }
