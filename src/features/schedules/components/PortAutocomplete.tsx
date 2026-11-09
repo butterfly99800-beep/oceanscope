@@ -1,7 +1,7 @@
 "use client";
 
 import { locationMatchScore } from "../lib/locationMatch";
-import { Anchor, MapPin } from "lucide-react";
+import { Anchor, MapPin, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CoscoCitySelection, PortOption } from "@/features/schedules/types";
 
@@ -53,12 +53,13 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
     setActiveIndex(0);
     const timer = window.setTimeout(() => {
       setLoadingCosco(true);
-      Promise.all([
-        fetch(`/api/cosco/cities/search?q=${encodeURIComponent(query)}`, { signal: controller.signal }).then(r => r.ok ? r.json() : {data: []}).catch(() => ({data: []})),
-        fetch(`/api/ports/search?q=${encodeURIComponent(query)}&pageSize=100`, { signal: controller.signal }).then(r => r.ok ? r.json() : {data: []}).catch(() => ({data: []})),
-      ]).then(([cities, local]) => {
-        if (!controller.signal.aborted) { setCoscoCities(cities.data || []); setMatchedPorts(local.data || []); setResultQuery(query); }
-      }).finally(() => { if (!controller.signal.aborted) setLoadingCosco(false); });
+      let pending = 2;
+      const finish = () => { pending--; if (!controller.signal.aborted && pending === 0) setLoadingCosco(false); };
+      setCoscoCities([]); setMatchedPorts([]); setResultQuery(query);
+      fetch(`/api/cosco/cities/search?q=${encodeURIComponent(query)}`, {signal: controller.signal})
+        .then(r => r.ok ? r.json() : {data: []}).then(payload => { if (!controller.signal.aborted) setCoscoCities(payload.data || []); }).catch(() => {}).finally(finish);
+      fetch(`/api/ports/search?q=${encodeURIComponent(query)}&pageSize=100`, {signal: controller.signal})
+        .then(r => r.ok ? r.json() : {data: []}).then(payload => { if (!controller.signal.aborted) setMatchedPorts(payload.data || []); }).catch(() => {}).finally(finish);
     }, 220);
 
     return () => {
@@ -73,11 +74,13 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
       <div className={`flex h-11 items-center gap-2 rounded-md border bg-white px-3 shadow-sm ${error ? "border-rose-300" : "border-slate-300 focus-within:border-ocean-500 focus-within:ring-4 focus-within:ring-ocean-100"}`}>
         <MapPin className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
         <input value={value} onFocus={() => setOpen(true)} onChange={(event) => { onInputChange(event.target.value); setOpen(true); setActiveIndex(0); }} onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) return;
           if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => Math.min(index + 1, Math.max(0, suggestions.length - 1))); }
           if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); }
           if (event.key === "Escape") setOpen(false);
           if (event.key === "Enter" && open && suggestions[activeIndex]) { event.preventDefault(); onSelect(suggestions[activeIndex]); setOpen(false); }
         }} className="min-w-0 flex-1 bg-transparent text-sm font-medium text-ink outline-none" placeholder="搜索港口、城市或代码" />
+        {value && <button type="button" aria-label={`清空${label}`} onMouseDown={event => event.preventDefault()} onClick={() => { onInputChange(""); setOpen(false); setActiveIndex(0); }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>}
         {selectedId ? <Anchor className="h-4 w-4 text-ocean-600" aria-hidden="true" /> : null}
       </div>
       {error ? <p className="mt-1 text-xs font-medium text-rose-600">{error}</p> : null}
