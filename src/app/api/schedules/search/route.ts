@@ -1,3 +1,4 @@
+import { pruneQueryStates } from "@/features/schedules/lib/pruneQueryStates";
 import { Prisma, ScheduleDataSource, ScheduleStatus, type Port } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -388,6 +389,7 @@ export async function GET(request: Request) {
       const staleWhere: Prisma.SailingScheduleWhereInput = { ...where, source: { in: [...liveSources] }, updatedAt: { gte: cacheCutoff() } };
       const key = [originPort.id, destinationPort.id, searchParams.get("dateFrom")?.slice(0, 10), searchParams.get("dateTo")?.slice(0, 10) || ""].join("|");
       const now = Date.now();
+      pruneQueryStates(liveFetchStates, now, cacheMinutes() * 60000, key);
       let state = liveFetchStates.get(key);
       const hasFailed = state?.providers.some((provider) => provider.status === "unavailable" || provider.status === "error");
       if (!state || (state.done && (searchParams.get("refresh") === "true" || (hasFailed && searchParams.get("retry") === "true") || now - state.startedAt >= cacheMinutes() * 60000))) {
