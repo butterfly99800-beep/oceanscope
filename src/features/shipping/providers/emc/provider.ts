@@ -2,7 +2,7 @@ import { load } from "cheerio";
 import type { APIRequestContext } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { canonicalPortCode } from "@/features/ports/server/source-port-match";
-import { publicProvider, publishedDate, responseText, scheduleId, type PublicScheduleInput } from "../public-http";
+import { publicProvider, publicLocationSearchTerms, publishedDate, responseText, scheduleId, type PublicScheduleInput } from "../public-http";
 const ROOT = "https://ss.shipmentlink.com";
 export const EMC_PAGE = ROOT + "/tvs2/jsp/TVS2_InteractiveSchedule.jsp";
 const ENDPOINT = ROOT + "/tvs2/jsp/TVS2_InteractiveScheduleRouting.jsp";
@@ -14,13 +14,16 @@ function emcDate(text: string) {
 }
 async function point(context: APIRequestContext, port: PublicScheduleInput["originPort"]) {
   const code = canonicalPortCode(port.locode);
-  const text = await responseText(context, ROOT + "/servlet/TUF1_AutoCompleteServlet", { scope: "context", search: port.name.split(",")[0].trim().toUpperCase(), action: "preLoad", switchSql: "", datasource: "bkLocations", fromFirst: "true" });
+  for (const search of publicLocationSearchTerms(port.name)) {
+  const text = await responseText(context, ROOT + "/servlet/TUF1_AutoCompleteServlet", { scope: "context", search: search.toUpperCase(), action: "preLoad", switchSql: "", datasource: "bkLocations", fromFirst: "true" });
   // The official endpoint returns JSON-shaped arrays with JavaScript hex escapes. Decode escapes, never execute it.
   const rows = JSON.parse(text.replace(/\\x([0-9a-f]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))) as string[][];
   const decoded = rows.map(row => row.map(value => decodeURIComponent(value)));
   const row = decoded.find(row => row[0]?.includes(`(${code})`));
-  if (!row) throw new Error(`PORT_NOT_FOUND: official location ${code}`);
+  if (!row) continue;
   return { code, internalCode: row[1], name: row[0] };
+  }
+  throw new Error(`PORT_NOT_FOUND: official location ${code}`);
 }
 // Classify only the displayed origin-to-discharge segment, not an omitted inland extension.
 export function evergreenDirectLeg(legs: string[][] | undefined, origin: string, destination: string): boolean | null {

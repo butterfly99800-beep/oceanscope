@@ -55,3 +55,11 @@ export function publicProvider(code: string, pageUrl: string, query: (context: A
     return { source: `${code}_LIVE`, schedules, warnings, fromCache: false, durationMs: Date.now() - started };
   } };
 }
+
+// Try the stored name first, then remove a descriptive port suffix. Callers must
+// still validate the official location code; this does not alias nearby ports.
+export function publicLocationSearchTerms(name: string): string[] {
+  const original = name.split(",")[0].trim();
+  const simplified = original.replace(/\s+(?:pt\.?|port)\s*$/i, "").trim();
+  return [...new Set([original, simplified].filter(Boolean))];
+}

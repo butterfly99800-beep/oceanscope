@@ -10,7 +10,8 @@ function load(file) {
 const assert=require('node:assert/strict');
 (async()=>{
  const api=fs.readFileSync(path.join(__dirname,'../src/app/api/schedules/search/route.ts'),'utf8');const section=api.slice(api.indexOf('function latestScheduleSnapshots'),api.indexOf('function sourceMatchesPorts'));const exported={};new Function('exports',ts.transpileModule('export '+section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exported);const base={source:'YML_LIVE_QUERY',originPortId:'a',destinationPortId:'b',vesselName:'ship',voyageNumber:'001',serviceName:'s',frequency:null,updatedAt:new Date(),rawSourceData:'{}'};assert.equal(exported.latestScheduleSnapshots([{...base,id:'1',sourceReference:'a'},{...base,id:'2',sourceReference:'b'}]).length,2,'API must retain different onward routings');
- const {publishedDate}=load(path.join(__dirname,'../src/features/shipping/providers/public-http.ts'));
+ const {publishedDate,publicLocationSearchTerms}=load(path.join(__dirname,'../src/features/shipping/providers/public-http.ts'));
+ assert.deepEqual(publicLocationSearchTerms('Yantian Pt'),['Yantian Pt','Yantian']);assert.deepEqual(publicLocationSearchTerms('Yantian Pt., China'),['Yantian Pt.','Yantian']);assert.deepEqual(publicLocationSearchTerms('Port Klang'),['Port Klang']);assert.deepEqual(publicLocationSearchTerms('Shanghai'),['Shanghai']);
  assert.equal(publishedDate('2026-02-30'),null);assert.equal(publishedDate('Contact local office'),null);
  const {mapHmm}=load(path.join(__dirname,'../src/features/shipping/providers/hmm/provider.ts'));
  const route={porLocCd:'CNSHA',pvyLocCd:'USLGB',porLocNm:'Shanghai',pvyLocNm:'Long Beach',totTrstmHrs:338,transit:[{orgLocCd:'CNSHA',destnLocCd:'USLGB',arvlStDt:'2026-11-15 14:00',dpartFnshDt:'2026-11-29 16:00',trsPtnModeCd:'MM',vslNm:'SM BUSAN',cssmObVoyNo:'2607E'}]};

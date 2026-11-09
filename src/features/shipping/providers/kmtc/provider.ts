@@ -1,6 +1,6 @@
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { canonicalPortCode } from "@/features/ports/server/source-port-match";
-import { publicProvider, publishedDate, responseText, scheduleId, type PublicScheduleInput } from "../public-http";
+import { publicProvider, publicLocationSearchTerms, publishedDate, responseText, scheduleId, type PublicScheduleInput } from "../public-http";
 export const KMTC_PAGE = "https://m.ekmtc.com/index.html#/schedule";
 const API = "https://api.ekmtc.com";
 type Point = { ctrCd: string; plcCd: string; plcNm: string; plcEnmOnly: string };
@@ -33,14 +33,17 @@ export function mapKmtc(payload: unknown, origin: Point, destination: Point, ori
 export const KMTCProvider = publicProvider("KMTC", KMTC_PAGE, async (context, input, from, to) => {
   async function point(port: PublicScheduleInput["originPort"]) {
     const code = canonicalPortCode(port.locode);
-    const rows = JSON.parse(await responseText(context, API + "/common/commons/places?" + new URLSearchParams({ plcNm: port.name.split(",")[0] }))) as Point[];
+    for (const search of publicLocationSearchTerms(port.name)) {
+    const rows = JSON.parse(await responseText(context, API + "/common/commons/places?" + new URLSearchParams({ plcNm: search }))) as Point[];
     if (!Array.isArray(rows)) throw new Error("RESPONSE_INVALID: KMTC locations missing");
     const candidates = rows.filter(row => row.ctrCd === code.slice(0, 2));
     const exact = candidates.find(row => row.ctrCd + row.plcCd === code);
     const byName = candidates.filter(row => row.plcEnmOnly?.toLowerCase() === port.name.split(",")[0].trim().toLowerCase());
     const selected = exact ?? (byName.length === 1 ? byName[0] : undefined);
-    if (!selected) throw new Error(`PORT_NOT_FOUND: official location ${code}`);
+    if (!selected) continue;
     return selected;
+    }
+    throw new Error(`PORT_NOT_FOUND: official location ${code}`);
   }
   const origin = await point(input.originPort), destination = await point(input.destinationPort);
   const params = new URLSearchParams({ mobileYN: "Y", startCtrCd: origin.ctrCd, startPlcCd: origin.plcCd, startPlcName: origin.plcNm, destCtrCd: destination.ctrCd, destPlcCd: destination.plcCd, destPlcName: destination.plcNm, searchYear: from.slice(0, 4), searchMonth: from.slice(5, 7), srchDt: from.replaceAll("-", ""), startDate: from.replaceAll("-", ""), endDate: to.replaceAll("-", ""), totStartDate: from.replaceAll("-", ""), totEndDate: to.replaceAll("-", ""), bound: "O", rf: "N", calendarOrList: "L", chkBkg: "N", vslType01: "01", vslType03: "03", filterDirect: "Y", filterTs: "Y", eiCatCd: "O", searchYN: "Y", filterTranMax: "0", filterTranMin: "0", main: "N", legIdx: "0" });
