@@ -1,3 +1,4 @@
+import { queryZimApi } from "./public-api";
 import { load } from "cheerio";
 import { existsSync } from "node:fs";
 import { mkdtemp,writeFile,unlink,rmdir } from "node:fs/promises";
@@ -33,11 +34,9 @@ export function mapZimPdf(text:string,origin:string,destination:string,from:stri
 function reader(){if(process.env.ZIM_PDFTOTEXT_PATH)return process.env.ZIM_PDFTOTEXT_PATH;if(process.platform==="win32")for(const dir of(process.env.PATH||"").split(path.delimiter)){if(path.isAbsolute(dir)&&path.basename(dir).toLowerCase()==="cmd"){const p=path.resolve(dir,"../mingw64/bin/pdftotext.exe");if(existsSync(p))return p;}}return "pdftotext";}
 const provider=publicProvider("ZIM",ZIM_PAGE,async(context,input,from,to)=>{
  const origin=canonicalPortCode(input.originPort.locode),destination=canonicalPortCode(input.destinationPort.locode);
- const date=new Date(from);const params=new URLSearchParams({portcode:origin,portdestinationcode:destination,direction:"true",fromdate:String(date.getUTCDate()).padStart(2,"0")+"-"+months[date.getUTCMonth()]+"-"+date.getUTCFullYear(),weeksahead:String(Math.ceil((Date.parse(to)-Date.parse(from))/604800000))});
- // Probe the official public API first; currently blocked. Do not guess a newly accessible JSON schema.
- const api=await context.get("https://www.zim.com/api/v2/scheduleByRoute/getResult?"+params,{timeout:8000}).catch(()=>null);
- if(api?.ok() && /json/i.test(api.headers()["content-type"]||""))throw new Error("RESPONSE_INVALID: ZIM API became available; response schema needs validation");
- if(destination!=="USLAX" || !["CNSHA","CNYTN"].includes(origin))throw new Error("PUBLICATION_UNSUPPORTED: current verified ZIM PDF coverage");
+ try { return await queryZimApi(context,input,from,to); } catch (error) {
+  if (/RATE_LIMITED/.test(String(error)) || destination!=="USLAX" || !["CNSHA","CNYTN"].includes(origin))throw error;
+ }
  const $=load(await responseText(context,ZIM_PAGE));
  const suffix=origin==="CNSHA"?"zim-shipping-gazette-cn-shanghai.pdf":"zim-e-commerce-xpress-zex-schedule.pdf";
  const href=$("a[href]").toArray().map(a=>$(a).attr("href")||"").find(u=>u.endsWith(suffix));
@@ -48,4 +47,4 @@ const provider=publicProvider("ZIM",ZIM_PAGE,async(context,input,from,to)=>{
  const dir=await mkdtemp(path.join(tmpdir(),"oceanscope-zim-")),file=path.join(dir,"schedule.pdf");
  try{await writeFile(file,pdf);const text=await new Promise<string>((resolve,reject)=>execFile(reader(),["-raw",file,"-"],{encoding:"utf8",timeout:10000,maxBuffer:2000000},(e,t)=>e?reject(new Error("ZIM_PDF_READER_FAILED: install pdftotext")):resolve(t)));return mapZimPdf(text.replace(/\r\n/g,"\n"),origin,destination,from,to,url.href);}finally{await unlink(file).catch(()=>undefined);await rmdir(dir).catch(()=>undefined);}
 });
-export const ZIMProvider={...provider,async searchSchedule(input:Parameters<typeof provider.searchSchedule>[0]){const result=await provider.searchSchedule(input);return{...result,warnings:[...result.warnings,"ZIM_PUBLISHED_ONLY: verified official publication coverage"]};}};
+export const ZIMProvider={...provider,async searchSchedule(input:Parameters<typeof provider.searchSchedule>[0]){const result=await provider.searchSchedule(input);return{...result,warnings:result.schedules.some(row=>row.rawText?.includes("official published schedule"))?[...result.warnings,"ZIM_PUBLISHED_ONLY: verified official publication coverage"]:result.warnings};}};
