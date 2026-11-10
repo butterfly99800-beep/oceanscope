@@ -10,7 +10,13 @@ function load(file) {
 const assert=require('node:assert/strict');
 (async()=>{
  const api=fs.readFileSync(path.join(__dirname,'../src/app/api/schedules/search/route.ts'),'utf8');const section=api.slice(api.indexOf('function latestScheduleSnapshots'),api.indexOf('function sourceMatchesPorts'));const exported={};new Function('exports',ts.transpileModule('export '+section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exported);const base={source:'YML_LIVE_QUERY',originPortId:'a',destinationPortId:'b',vesselName:'ship',voyageNumber:'001',serviceName:'s',frequency:null,updatedAt:new Date(),rawSourceData:'{}'};assert.equal(exported.latestScheduleSnapshots([{...base,id:'1',sourceReference:'a'},{...base,id:'2',sourceReference:'b'}]).length,2,'API must retain different onward routings');
- const {publishedDate,publicLocationSearchTerms}=load(path.join(__dirname,'../src/features/shipping/providers/public-http.ts'));
+ const {publishedDate,publicLocationSearchTerms,responseText}=load(path.join(__dirname,'../src/features/shipping/providers/public-http.ts'));
+ let transportCalls=0;
+ const fakeResponse=status=>({status:()=>status,ok:()=>status===200,text:async()=>"official response"});
+ assert.equal(await responseText({get:async()=>fakeResponse(++transportCalls===1?503:200)},'https://official.invalid/query'),'official response');assert.equal(transportCalls,2);
+ transportCalls=0;await assert.rejects(responseText({get:async()=>{transportCalls++;return fakeResponse(429)}},'https://official.invalid/query'),/RATE_LIMITED/);assert.equal(transportCalls,1);
+ transportCalls=0;assert.equal(await responseText({get:async()=>{transportCalls++;return { ...fakeResponse(200),text:async()=>"No data available"}}},'https://official.invalid/query'),'No data available');assert.equal(transportCalls,1);
+ console.log('PASS public HTTP integration: retry transient 503 once, do not retry rate limit or genuine empty data');
  assert.deepEqual(publicLocationSearchTerms('Yantian Pt'),['Yantian Pt','Yantian']);assert.deepEqual(publicLocationSearchTerms('Yantian Pt., China'),['Yantian Pt.','Yantian']);assert.deepEqual(publicLocationSearchTerms('Port Klang'),['Port Klang']);assert.deepEqual(publicLocationSearchTerms('Shanghai'),['Shanghai']);
  assert.equal(publishedDate('2026-02-30'),null);assert.equal(publishedDate('Contact local office'),null);
  const {kmtcLocationSearchTerms}=load(path.join(__dirname,'../src/features/shipping/providers/kmtc/provider.ts'));

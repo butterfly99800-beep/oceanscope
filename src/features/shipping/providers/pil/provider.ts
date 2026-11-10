@@ -1,3 +1,4 @@
+import { retryPublicRequest } from "../retry-public-request";
 import { load } from "cheerio";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { canonicalPortCode, samePortCode } from "@/features/ports/server/source-port-match";
@@ -55,7 +56,8 @@ export const PILProvider = publicProvider("PIL", PIL_PAGE, async (context, input
   if (!nonce.success || typeof nonce.n !== "string") throw new Error("RESPONSE_INVALID: PIL anonymous session missing");
   // PIL requires ISO dates. Compact dates trigger a rejection page rather than a JSON validation error.
   const params = new URLSearchParams({ port_code_origin: origin, port_code_destination: destination, p2p_selectedstartdate: from, p2p_selectedenddate: to, n: nonce.n, timestamp });
-  const response = await context.get(API + "schedules-point2point.php?" + params, { headers: { Referer: PIL_PAGE, "X-Requested-With": "XMLHttpRequest" }, timeout: 30000 });
+  const response = await retryPublicRequest(() => context.get(API + "schedules-point2point.php?" + params, { headers: { Referer: PIL_PAGE, "X-Requested-With": "XMLHttpRequest" }, timeout: 30000 }));
+  if (response.status() === 429) throw new Error("RATE_LIMITED: official HTTP 429");
   if (!response.ok()) throw new Error(`ACCESS_BLOCKED: official HTTP ${response.status()}`);
   const body = await response.text();
   if (/Request Rejected|requested URL was rejected/i.test(body)) throw new Error("ACCESS_BLOCKED: PIL official request rejected");

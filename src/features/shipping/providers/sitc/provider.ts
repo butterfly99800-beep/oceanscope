@@ -1,3 +1,4 @@
+import { retryPublicRequest } from "../retry-public-request";
 import type { APIRequestContext } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { canonicalPortCode, samePortCode } from "@/features/ports/server/source-port-match";
@@ -22,19 +23,21 @@ async function querySitc(context: APIRequestContext, input: PublicScheduleInput,
  const names: string[] = [];
  for (const code of codes) {
   const q = new URLSearchParams({currentPage:"1",pageSize:"100",portCode:"%"+code+"%",portNameCn:"%"+code+"%",portName:"%"+code+"%"});
-  const r = await context.get(ROOT + "/api/ebusiness/autocomplete/queryListPort?" + q, {timeout:20000});
-  if (!r.ok()) throw new Error("ACCESS_BLOCKED: SITC HTTP " + r.status());
+  const r = await retryPublicRequest(() => context.get(ROOT + "/api/ebusiness/autocomplete/queryListPort?" + q, {timeout:20000}));
+  if (r.status() === 429) throw new Error("RATE_LIMITED: SITC HTTP 429");
+ if (!r.ok()) throw new Error("ACCESS_BLOCKED: SITC HTTP " + r.status());
   const data = await r.json();
-  if (data.code === 429) throw new Error("VERIFICATION_REQUIRED: SITC request verification");
+  if (data.code === 429) throw new Error("RATE_LIMITED: SITC request limit");
   const port = data.data?.records?.find((p: {portCode:string}) => samePortCode(p.portCode, code));
   if (!port) throw new Error("PORT_NOT_FOUND: " + code);
   names.push(port.portName);
  }
  const q = new URLSearchParams({pol:names[0],pod:names[1],datefrom:from,dateto:to,type:"false"});
- const r = await context.post(ROOT + "/api/equery/voyageInfo/" + (transit ? "searchTsPlan" : "searchPlan") + "?" + q, {timeout:25000});
+ const r = await retryPublicRequest(() => context.post(ROOT + "/api/equery/voyageInfo/" + (transit ? "searchTsPlan" : "searchPlan") + "?" + q, {timeout:25000}));
+ if (r.status() === 429) throw new Error("RATE_LIMITED: SITC HTTP 429");
  if (!r.ok()) throw new Error("ACCESS_BLOCKED: SITC HTTP " + r.status());
  const data = await r.json();
- if (data.code === 429) throw new Error("VERIFICATION_REQUIRED: SITC request verification");
+ if (data.code === 429) throw new Error("RATE_LIMITED: SITC request limit");
  if (!data.success || !Array.isArray(data.data?.list)) throw new Error("RESPONSE_INVALID: SITC schedule list missing");
  return transit ? mapSitcTransit(data.data.list, codes[0], codes[1], from, to) : mapSitc(data.data.list, codes[0], codes[1], from, to);
 }
@@ -65,7 +68,7 @@ const directProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t
 const transitProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,true));
 export const SITCProvider={...directProvider,async searchSchedule(input:PublicScheduleInput) {
  const direct=await directProvider.searchSchedule(input);
- if(direct.warnings.some(w=>/PORT_NOT_FOUND|ACCESS_BLOCKED|VERIFICATION_REQUIRED/.test(w))) return direct;
+ if(direct.warnings.some(w=>/PORT_NOT_FOUND|ACCESS_BLOCKED|VERIFICATION_REQUIRED|RATE_LIMITED/.test(w))) return direct;
  const transit=await transitProvider.searchSchedule(input);
  const schedules=[...direct.schedules,...transit.schedules];
  const warnings=[...new Set([...direct.warnings,...transit.warnings])].filter(w=>!schedules.length || w!=="NO_SCHEDULE_FOUND");

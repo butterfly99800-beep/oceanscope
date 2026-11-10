@@ -1,3 +1,4 @@
+import { retryPublicRequest } from "./retry-public-request";
 import { createHash } from "node:crypto";
 import { request, type APIRequestContext } from "playwright";
 import type { Port } from "@prisma/client";
@@ -18,7 +19,8 @@ export function scheduleId(code: string, values: unknown): string {
   return `${code.toLowerCase()}-${createHash("sha256").update(JSON.stringify(values)).digest("hex").slice(0, 40)}`;
 }
 export async function responseText(context: APIRequestContext, url: string, form?: Record<string, string>): Promise<string> {
-  const response = form ? await context.post(url, { form, timeout: 25000 }) : await context.get(url, { timeout: 25000 });
+  const response = await retryPublicRequest(() => form ? context.post(url, { form, timeout: 25000 }) : context.get(url, { timeout: 25000 }));
+  if (response.status() === 429) throw new Error("RATE_LIMITED: official HTTP 429");
   if (!response.ok()) throw new Error(`ACCESS_BLOCKED: official HTTP ${response.status()}`);
   const text = await response.text();
   if (/Just a moment\.\.\.|<title>Access Denied|Incapsula incident ID|Request Rejected/i.test(text)) throw new Error("VERIFICATION_REQUIRED: official access verification");
@@ -38,7 +40,7 @@ export function publicProvider(code: string, pageUrl: string, query: (context: A
     catch (error) {
       const reason = error instanceof Error ? error.message.split("\n")[0] : "QUERY_FAILED";
       // Missing official locations and malformed data are not solved by changing transport.
-      if (/PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESPONSE_INVALID/.test(reason)) warnings.push(`${code}_${reason}`);
+      if (/PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESPONSE_INVALID|RATE_LIMITED/.test(reason)) warnings.push(`${code}_${reason}`);
       else {
         const browser = await launchPublicBrowser({ channel: "msedge" }).catch(() => null);
         if (!browser) warnings.push(`${code}_${reason}`);
