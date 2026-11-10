@@ -1,6 +1,7 @@
+import type { APIRequestContext } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { canonicalPortCode, samePortCode } from "@/features/ports/server/source-port-match";
-import { publicProvider, publishedDate, scheduleId } from "../public-http";
+import { publicProvider, publishedDate, scheduleId, type PublicScheduleInput } from "../public-http";
 const ROOT = "https://ebusiness.sitcline.com";
 type Row = { polCode: string; podCode: string; polName: string; podName: string; ctd?: string; cta?: string; weekEtd?: string; weekEta?: string; vesselName?: string; voyageNo?: string; voyageLeg?: string; serviceLineCode?: string; polTerminalName?: string; podTerminalName?: string; underway?: number };
 export function mapSitc(rows: Row[], origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
@@ -16,7 +17,7 @@ export function mapSitc(rows: Row[], origin: string, destination: string, from: 
    rawText: JSON.stringify({ sourceUrl: ROOT + "/api/equery/voyageInfo/searchPlan", row, scope: "official direct sailing search", timeBasis: "official local dates; current dates preferred over proforma dates" }) }];
  });
 }
-const directProvider = publicProvider("SITC", ROOT + "/", async (context, input, from, to) => {
+async function querySitc(context: APIRequestContext, input: PublicScheduleInput, from: string, to: string, transit: boolean) {
  const codes = [canonicalPortCode(input.originPort.locode), canonicalPortCode(input.destinationPort.locode)];
  const names: string[] = [];
  for (const code of codes) {
@@ -30,12 +31,43 @@ const directProvider = publicProvider("SITC", ROOT + "/", async (context, input,
   names.push(port.portName);
  }
  const q = new URLSearchParams({pol:names[0],pod:names[1],datefrom:from,dateto:to,type:"false"});
- const r = await context.post(ROOT + "/api/equery/voyageInfo/searchPlan?" + q, {timeout:25000});
+ const r = await context.post(ROOT + "/api/equery/voyageInfo/" + (transit ? "searchTsPlan" : "searchPlan") + "?" + q, {timeout:25000});
  if (!r.ok()) throw new Error("ACCESS_BLOCKED: SITC HTTP " + r.status());
  const data = await r.json();
  if (data.code === 429) throw new Error("VERIFICATION_REQUIRED: SITC request verification");
  if (!data.success || !Array.isArray(data.data?.list)) throw new Error("RESPONSE_INVALID: SITC schedule list missing");
- return mapSitc(data.data.list, codes[0], codes[1], from, to);
-});
+ return transit ? mapSitcTransit(data.data.list, codes[0], codes[1], from, to) : mapSitc(data.data.list, codes[0], codes[1], from, to);
+}
 
-export const SITCProvider = { ...directProvider, async searchSchedule(input: Parameters<typeof directProvider.searchSchedule>[0]) { const result = await directProvider.searchSchedule(input); return { ...result, warnings: [...result.warnings, "SITC_DIRECT_ONLY: official direct sailings; transshipment not yet verified"] }; } };
+type TransitRow = {port: string; portName: string; etdEta: string; vesselVoyageLeg?: string; serviceLineCode?: string; underway?: number};
+export function mapSitcTransit(rows: TransitRow[], origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
+ return rows.flatMap(row => {
+  const codes = typeof row.port === "string" ? row.port.split("->") : [];
+  const names = typeof row.portName === "string" ? row.portName.split("->") : [];
+  const dates = typeof row.etdEta === "string" ? row.etdEta.split("->").map(publishedDate) : [];
+  if (codes.length < 3 || names.length !== codes.length || dates.length !== 2*(codes.length-1) || dates.some(d => !d)) return [];
+  if (!samePortCode(codes[0],origin) || !samePortCode(codes[codes.length-1],destination)) return [];
+  const times = dates as string[];
+  if (times.some((d,i) => i > 0 && d < times[i-1])) return [];
+  const etd=times[0], eta=times[times.length-1];
+  if (etd >= eta || etd.slice(0,10)<from || etd.slice(0,10)>to) return [];
+  // The first leg may be an unnamed barge; do not present the later vessel as that leg.
+  const firstVessel=row.vesselVoyageLeg?.split("->")[0] || "";
+  const named=/^(.+?)\s+(\d+[A-Z]?)$/.exec(firstVessel);
+  return [{id:scheduleId("SITC",row),carrierName:"SITC",originLocode:origin,destinationLocode:destination,originText:names[0],destinationText:names[names.length-1],
+   etd,eta,etdTimeKnown:/\d{2}:\d{2}/.test(row.etdEta.split("->")[0]),etaTimeKnown:/\d{2}:\d{2}/.test(row.etdEta.split("->").at(-1) || ""),vesselName:named?.[1] || null,voyageNumber:named?.[2] || null,
+   serviceName:row.serviceLineCode || null,routeName:row.portName,direct:false,stopCount:codes.length-2,transitPorts:names.slice(1,-1),
+   transitDays:Number.isInteger(row.underway) && row.underway!>0 ? row.underway! : null,originFacilityName:null,destinationFacilityName:null,cutOffTime:null,availableTime:null,
+   rawText:JSON.stringify({sourceUrl:ROOT+"/api/equery/voyageInfo/searchTsPlan",row,scope:"official connecting itinerary including initial barge when supplied",timeBasis:"official local times; offset not supplied"})}];
+ });
+}
+const directProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,false));
+const transitProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,true));
+export const SITCProvider={...directProvider,async searchSchedule(input:PublicScheduleInput) {
+ const direct=await directProvider.searchSchedule(input);
+ if(direct.warnings.some(w=>/PORT_NOT_FOUND|ACCESS_BLOCKED|VERIFICATION_REQUIRED/.test(w))) return direct;
+ const transit=await transitProvider.searchSchedule(input);
+ const schedules=[...direct.schedules,...transit.schedules];
+ const warnings=[...new Set([...direct.warnings,...transit.warnings])].filter(w=>!schedules.length || w!=="NO_SCHEDULE_FOUND");
+ return {...direct,schedules,warnings,durationMs:direct.durationMs+transit.durationMs};
+}};
