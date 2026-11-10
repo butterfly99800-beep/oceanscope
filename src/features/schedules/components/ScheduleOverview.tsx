@@ -31,9 +31,7 @@ export function ScheduleOverview({ schedules }: { schedules: SailingSchedule[] }
   return <section className="rounded-lg border border-slate-200 bg-white p-4">
     <div className="flex items-center justify-between"><h2 className="font-semibold">航线汇总</h2>
       <button type="button" disabled={exporting} onClick={() => void exportExcel()} className="rounded bg-ocean-600 px-4 py-2 text-white disabled:opacity-50">{exporting ? "正在导出…" : `导出 Excel（${schedules.length} 条）`}</button></div>
-    {schedules.some(row => row.carrierCode === "ZIM") && <p className="mt-2 text-xs text-slate-500">ZIM 为官网已发布的上海/盐田至洛杉矶船期表，未覆盖全部点到点方案。</p>}
     {error && <p role="alert">{error}</p>}
-    <p className="mt-3 text-xs text-slate-500">按当前查询结果的计划离港日期汇总，不代表固定每周班期。航程仅展示船司已公布数据。</p>
     {groups.filter(group => group.rows.length).map(group => {
       const table = <div className="mt-3 overflow-x-auto rounded-lg border border-blue-100"><table className="w-full min-w-[640px] text-left text-sm">
         <thead className="bg-[#5b8fdf] text-white"><tr><th className="w-20 px-4 py-3">开航日</th><th className="px-4 py-3">船司 / 服务 · 航程</th><th className="w-56 px-4 py-3">计划离港日期</th></tr></thead>
