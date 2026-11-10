@@ -40,7 +40,7 @@ export function publicProvider(code: string, pageUrl: string, query: (context: A
     catch (error) {
       const reason = error instanceof Error ? error.message.split("\n")[0] : "QUERY_FAILED";
       // Missing official locations and malformed data are not solved by changing transport.
-      if (/PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESPONSE_INVALID|RATE_LIMITED/.test(reason)) warnings.push(`${code}_${reason}`);
+      if (/PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESULT_PORT_MISMATCH|RESPONSE_INVALID|RATE_LIMITED/.test(reason)) warnings.push(`${code}_${reason}`);
       else {
         const browser = await launchPublicBrowser({ channel: "msedge" }).catch(() => null);
         if (!browser) warnings.push(`${code}_${reason}`);
@@ -62,6 +62,6 @@ export function publicProvider(code: string, pageUrl: string, query: (context: A
 // still validate the official location code; this does not alias nearby ports.
 export function publicLocationSearchTerms(name: string): string[] {
   const original = name.split(",")[0].trim();
-  const simplified = original.replace(/\s+(?:pt\.?|port)\s*$/i, "").trim();
+  const simplified = original.replace(/\s+(?:pt\.?|port|city)\s*$/i, "").trim();
   return [...new Set([original, simplified].filter(Boolean))];
 }

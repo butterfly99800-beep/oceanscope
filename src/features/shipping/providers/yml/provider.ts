@@ -27,6 +27,9 @@ export function mapYangMing(payload: unknown, origin: string, destination: strin
       cutOffTime: publishedDate(row.cutoffCY), siCutOffTime: publishedDate(row.cutoffSI), availableTime: null,
       rawText: JSON.stringify({ sourceUrl: API + "GetP2PRoutes", officialLegs: legs, row, timeBasis: "official local dates; offset not supplied" }) });
   }
+  if (!schedules.length && payload.length && (payload as Route[]).every(row => row.placeOfReceiptCode && row.placeOfDeliveryCode && (!samePortCode(row.placeOfReceiptCode, origin) || !samePortCode(row.placeOfDeliveryCode, destination)))) {
+    throw new Error("RESULT_PORT_MISMATCH: official routes end at different requested locations");
+  }
   return Array.from(new Map(schedules.map(row => [row.id, row])).values());
 }
 export const YMLProvider = publicProvider("YML", YML_PAGE, async (context, input, from, to) => {
