@@ -30,10 +30,13 @@ export function mapKmtc(payload: unknown, origin: Point, destination: Point, ori
   }
   return schedules;
 }
+export function kmtcLocationSearchTerms(name: string, locode: string) {
+  return [...new Set([...publicLocationSearchTerms(name), canonicalPortCode(locode).slice(2)])];
+}
 export const KMTCProvider = publicProvider("KMTC", KMTC_PAGE, async (context, input, from, to) => {
   async function point(port: PublicScheduleInput["originPort"]) {
     const code = canonicalPortCode(port.locode);
-    for (const search of publicLocationSearchTerms(port.name)) {
+    for (const search of kmtcLocationSearchTerms(port.name, code)) {
     const rows = JSON.parse(await responseText(context, API + "/common/commons/places?" + new URLSearchParams({ plcNm: search }))) as Point[];
     if (!Array.isArray(rows)) throw new Error("RESPONSE_INVALID: KMTC locations missing");
     const candidates = rows.filter(row => row.ctrCd === code.slice(0, 2));
