@@ -1,3 +1,5 @@
+import { queryPilBrowser } from "./browser";
+import { auditedSchedules } from "../query-audit";
 import { retryPublicRequest } from "../retry-public-request";
 import { load } from "cheerio";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -12,24 +14,26 @@ function pilDate(value: string) {
   return match && month ? publishedDate(`${match[3]}-${String(month).padStart(2, "0")}-${match[1]}`) : null;
 }
 export function mapPil(payload: unknown, origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
-  const data = payload as { success?: boolean; schedulePointToPoint?: { err?: number; main?: string } };
+  const data = payload as { success?: boolean; browserRows?:number; schedulePointToPoint?: { err?: number; main?: string } };
   if (!data?.success || typeof data.schedulePointToPoint?.main !== "string") throw new Error("RESPONSE_INVALID: PIL schedule table missing");
   const $ = load(data.schedulePointToPoint.main);
   if (!$("#table_p2p").length) {
-    if (/no (?:result|data|schedule)/i.test($.text())) return [];
+    if (/no (?:result|data|schedule)/i.test($.text())) return auditedSchedules([],0,{});
     throw new Error("RESPONSE_INVALID: PIL schedule table missing");
   }
   const schedules: CoscoSchedulePreview[] = [];
+  const excluded={port:0,date:0,invalid:0};
   $('tr[id^="schedule_"]').each((_, tr) => {
     const cells = $(tr).children("td");
-    if (cells.length !== 12) return;
+    if (cells.length !== 12) {excluded.invalid++;return;}
     const value = (index: number) => cells.eq(index).text().replace(/\s+/g, " ").trim();
     const link = cells.eq(11).find("a[name=bookinfo]").attr("href");
-    if (!link) return;
+    if (!link) {excluded.invalid++;return;}
     const params = new URL(link, ROOT).searchParams;
-    if (!samePortCode(params.get("POL") ?? "", origin) || !samePortCode(params.get("POD") ?? "", destination)) return;
+    if (!samePortCode(params.get("POL") ?? "", origin) || !samePortCode(params.get("POD") ?? "", destination)) {excluded.port++;return;}
     const etd = pilDate(value(2)), eta = pilDate(value(3));
-    if (!etd || !eta || etd >= eta || etd.slice(0, 10) < from || etd.slice(0, 10) > to) return;
+    if (!etd || !eta || etd >= eta) {excluded.invalid++;return;}
+    if(etd.slice(0,10)<from||etd.slice(0,10)>to){excluded.date++;return;}
     const detail = $("#schedule_info_" + $(tr).attr("id")?.replace("schedule_", ""));
     const seaLegs = detail.find(".fa-ship").length;
     const vesselName = value(6) || null, voyageNumber = value(9) || null;
@@ -39,7 +43,9 @@ export function mapPil(payload: unknown, origin: string, destination: string, fr
       transitPorts: [], originFacilityName: null, destinationFacilityName: null, cutOffTime: null, availableTime: null,
       rawText: JSON.stringify({ sourceUrl: API + "schedules-point2point.php", localVoyage: value(8), officialRouting: detail.text().replace(/\s+/g, " ").trim(), timeBasis: "official local dates; offset not supplied" }) });
   });
-  return schedules;
+  const result=auditedSchedules(schedules,$('tr[id^="schedule_"]').length,excluded);
+  if(typeof data.browserRows==="number"&&result.audit){result.audit.browserRows=data.browserRows;if(data.browserRows!==result.audit.received)result.audit.complete=false;}
+  return result;
 }
 export const PILProvider = publicProvider("PIL", PIL_PAGE, async (context, input, from, to) => {
   const html = await responseText(context, PIL_PAGE);
@@ -61,6 +67,6 @@ export const PILProvider = publicProvider("PIL", PIL_PAGE, async (context, input
   if (!response.ok()) throw new Error(`ACCESS_BLOCKED: official HTTP ${response.status()}`);
   const body = await response.text();
   if (/Request Rejected|requested URL was rejected/i.test(body)) throw new Error("ACCESS_BLOCKED: PIL official request rejected");
-  if (body.trim() === "No data available") return [];
+  if (body.trim() === "No data available") return auditedSchedules([],0,{});
   return mapPil(JSON.parse(body), origin, destination, from, to);
-});
+},async(page,input,from,to)=>mapPil(await queryPilBrowser(page,input,from,to),canonicalPortCode(input.originPort.locode),canonicalPortCode(input.destinationPort.locode),from,to));

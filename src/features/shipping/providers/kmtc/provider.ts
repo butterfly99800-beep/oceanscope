@@ -1,3 +1,4 @@
+import { auditedSchedules } from "../query-audit";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { canonicalPortCode } from "@/features/ports/server/source-port-match";
 import { publicProvider, publicLocationSearchTerms, publishedDate, responseText, scheduleId, type PublicScheduleInput } from "../public-http";
@@ -11,7 +12,7 @@ export function kmtcDate(value: unknown, time?: unknown): string | null {
   const clock = value.length > 8 ? value.slice(8, 12) : typeof time === "string" && /^\d{4}$/.test(time) ? time : null;
   return publishedDate(`${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}${clock ? ` ${clock.slice(0, 2)}:${clock.slice(2)}` : ""}`);
 }
-export function mapKmtc(payload: unknown, origin: Point, destination: Point, originCode: string, destinationCode: string, from: string, to: string): CoscoSchedulePreview[] {
+function parseKmtc(payload: unknown, origin: Point, destination: Point, originCode: string, destinationCode: string, from: string, to: string): CoscoSchedulePreview[] {
   const rows = (payload as { listSchedule?: Row[] })?.listSchedule;
   if (!Array.isArray(rows)) throw new Error("RESPONSE_INVALID: KMTC listSchedule missing");
   const schedules: CoscoSchedulePreview[] = [];
@@ -53,3 +54,12 @@ export const KMTCProvider = publicProvider("KMTC", KMTC_PAGE, async (context, in
   const payload = JSON.parse(await responseText(context, API + "/schedule/schedule/leg/search-schedule?" + params));
   return mapKmtc(payload, origin, destination, canonicalPortCode(input.originPort.locode), canonicalPortCode(input.destinationPort.locode), from, to);
 });
+
+export function mapKmtc(payload:unknown,origin:Point,destination:Point,originCode:string,destinationCode:string,from:string,to:string){
+ const rows=(payload as {listSchedule?:Row[]})?.listSchedule;if(!Array.isArray(rows))return parseKmtc(payload,origin,destination,originCode,destinationCode,from,to);
+ const excluded={port:0,date:0,invalid:0};const result=rows.flatMap(row=>{
+  if(row.polCtrCd!==origin.ctrCd||row.pol!==origin.plcCd||row.podCtrCd!==destination.ctrCd||row.pod!==destination.plcCd){excluded.port++;return [];}
+  const etd=kmtcDate(row.etd,row.etdTm);if(etd&&(etd.slice(0,10)<from||etd.slice(0,10)>to)){excluded.date++;return [];}
+  const mapped=parseKmtc({listSchedule:[row]},origin,destination,originCode,destinationCode,from,to);if(!mapped.length)excluded.invalid++;return mapped;
+ });return auditedSchedules(result,rows.length,excluded);
+}

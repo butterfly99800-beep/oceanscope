@@ -1,3 +1,5 @@
+import { collectOfficialPages } from "../official-pages";
+import { retryPublicRequest } from "../retry-public-request";
 import { cmaSiDeadline } from "../port-clock";
 import { chromium, request } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -44,10 +46,10 @@ async function fetchApiSailings(input: CmaProviderSearchInput): Promise<Sailing[
     return Math.min(10000, remaining);
   };
   try {
-    const entry = await http.get(ENTRY, { timeout: timeout() });
+    const entry = await retryPublicRequest(() => http.get(ENTRY, { timeout: timeout() }));
     await checkResponse(entry, "http-entry");
     const post = async (path: string, form: Record<string, string>) => {
-      const response = await http.post(`${ENTRY}/${path}`, { form, timeout: timeout(), headers: { "X-Requested-With": "XMLHttpRequest", Referer: ENTRY } });
+      const response = await retryPublicRequest(() => http.post(`${ENTRY}/${path}`, { form, timeout: timeout(), headers: { "X-Requested-With": "XMLHttpRequest", Referer: ENTRY } }));
       await checkResponse(response, `http-${path}`);
       const json = await response.json();
       if (json.state !== "S" || !Array.isArray(json.data)) throw new Error("CMA_API_RESPONSE_INVALID");
@@ -57,9 +59,8 @@ async function fetchApiSailings(input: CmaProviderSearchInput): Promise<Sailing[
     const from = input.departureDate.slice(0, 10);
     const to = (input.dateTo || input.departureDate).slice(0, 10);
     const sailings: Sailing[] = [];
-    for (let page = 1; page <= 10; page++) {
-      const list = await post("PostListData", { vessel: "", voyage: "", pol: origin, area: "", line: "", service: chinaTrade(input.destinationPort.locode) || "", etdDateFrom: from, etdDateTo: to, Draw: String(page + 1), Page: String(page), Rows: "100", order: "asc", sort: "" });
-      for (const row of list.data) {
+    const officialRows = await collectOfficialPages(async page => post("PostListData", { vessel: "", voyage: "", pol: origin, area: "", line: "", service: chinaTrade(input.destinationPort.locode) || "", etdDateFrom: from, etdDateTo: to, Draw: String(page + 1), Page: String(page), Rows: "100", order: "asc", sort: "" }));
+      for (const row of officialRows) {
         if (row.PlaceCode !== origin || /OMIT|CANCEL/i.test(`${row.Status || ""} ${row.VesselCode || ""}`)) continue;
         const match = String(row.EtdDate || "").match(/^\/Date\((-?\d+)\)\/$/);
         if (!match) continue;
@@ -71,9 +72,7 @@ async function fetchApiSailings(input: CmaProviderSearchInput): Promise<Sailing[
         const destinations = detail.data.flatMap(group => Array.isArray(group.Value) ? group.Value as Sailing["destinations"] : []);
         sailings.push({ row, etd: day, destinations });
       }
-      if (page * 100 >= Number(list.recordsFiltered) || list.data.length < 100) return sailings;
-    }
-    throw new Error("CMA_CHINA_RESULT_LIMIT");
+    return sailings;
   } finally { await http.dispose(); }
 }
 
@@ -84,7 +83,7 @@ async function fetchSailings(input: CmaProviderSearchInput): Promise<Sailing[]> 
   let httpFailure = "";
   try { return await fetchApiSailings(input); } catch (error) {
     httpFailure = error instanceof Error ? error.message.split("\n")[0] : "unknown HTTP error";
-    if (error instanceof Error && /HTTP_429|RESULT_LIMIT/.test(error.message)) throw error;
+    if (error instanceof Error && /HTTP_429|RESULT_LIMIT|PAGINATION_INCOMPLETE/.test(error.message)) throw error;
     if (process.env.SCHEDULE_DEBUG === "true") console.info("CMA API failed; trying headless public page", error instanceof Error ? error.message : "unknown error");
   }
   const browser = await chromium.launch({

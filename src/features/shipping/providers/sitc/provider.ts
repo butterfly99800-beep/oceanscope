@@ -1,3 +1,5 @@
+import { querySitcBrowser } from "./browser";
+import { auditedSchedules } from "../query-audit";
 import { retryPublicRequest } from "../retry-public-request";
 import type { APIRequestContext } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -5,7 +7,7 @@ import { canonicalPortCode, samePortCode } from "@/features/ports/server/source-
 import { publicProvider, publishedDate, scheduleId, type PublicScheduleInput } from "../public-http";
 const ROOT = "https://ebusiness.sitcline.com";
 type Row = { polCode: string; podCode: string; polName: string; podName: string; ctd?: string; cta?: string; weekEtd?: string; weekEta?: string; vesselName?: string; voyageNo?: string; voyageLeg?: string; serviceLineCode?: string; polTerminalName?: string; podTerminalName?: string; underway?: number };
-export function mapSitc(rows: Row[], origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
+function parseSitc(rows: Row[], origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
  return rows.flatMap(row => {
   if (!samePortCode(row.polCode, origin) || !samePortCode(row.podCode, destination)) return [];
   const etd = publishedDate(row.ctd || row.weekEtd), eta = publishedDate(row.cta || row.weekEta);
@@ -43,7 +45,7 @@ async function querySitc(context: APIRequestContext, input: PublicScheduleInput,
 }
 
 type TransitRow = {port: string; portName: string; etdEta: string; vesselVoyageLeg?: string; serviceLineCode?: string; underway?: number};
-export function mapSitcTransit(rows: TransitRow[], origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
+function parseSitcTransit(rows: TransitRow[], origin: string, destination: string, from: string, to: string): CoscoSchedulePreview[] {
  return rows.flatMap(row => {
   const codes = typeof row.port === "string" ? row.port.split("->") : [];
   const names = typeof row.portName === "string" ? row.portName.split("->") : [];
@@ -64,13 +66,33 @@ export function mapSitcTransit(rows: TransitRow[], origin: string, destination: 
    rawText:JSON.stringify({sourceUrl:ROOT+"/api/equery/voyageInfo/searchTsPlan",row,scope:"official connecting itinerary including initial barge when supplied",timeBasis:"official local times; offset not supplied"})}];
  });
 }
-const directProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,false));
-const transitProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,true));
+const directProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,false),async(p,i,f,t)=>mapSitc(await querySitcBrowser(p,i,f,t,false),canonicalPortCode(i.originPort.locode),canonicalPortCode(i.destinationPort.locode),f,t));
+const transitProvider=publicProvider("SITC",ROOT+"/",(c,i,f,t)=>querySitc(c,i,f,t,true),async(p,i,f,t)=>mapSitcTransit(await querySitcBrowser(p,i,f,t,true),canonicalPortCode(i.originPort.locode),canonicalPortCode(i.destinationPort.locode),f,t));
 export const SITCProvider={...directProvider,async searchSchedule(input:PublicScheduleInput) {
  const direct=await directProvider.searchSchedule(input);
  if(direct.warnings.some(w=>/PORT_NOT_FOUND|ACCESS_BLOCKED|VERIFICATION_REQUIRED|RATE_LIMITED/.test(w))) return direct;
  const transit=await transitProvider.searchSchedule(input);
  const schedules=[...direct.schedules,...transit.schedules];
  const warnings=[...new Set([...direct.warnings,...transit.warnings])].filter(w=>!schedules.length || w!=="NO_SCHEDULE_FOUND");
- return {...direct,schedules,warnings,durationMs:direct.durationMs+transit.durationMs};
+ return {...direct,schedules,warnings,audits:[direct.audit,transit.audit],durationMs:direct.durationMs+transit.durationMs};
 }};
+
+export function mapSitc(rows:Row[],origin:string,destination:string,from:string,to:string){
+ const excluded={port:0,date:0,invalid:0};const result=rows.flatMap(row=>{
+  if(!samePortCode(row.polCode,origin)||!samePortCode(row.podCode,destination)){excluded.port++;return [];}
+  const etd=publishedDate(row.ctd||row.weekEtd);
+  if(etd&&(etd.slice(0,10)<from||etd.slice(0,10)>to)){excluded.date++;return [];}
+  const mapped=parseSitc([row],origin,destination,from,to);if(!mapped.length)excluded.invalid++;return mapped;
+ });const output=auditedSchedules(result,rows.length,excluded);
+ const browserRows=(rows as typeof rows & {browserRows?:number}).browserRows;if(typeof browserRows==="number"&&output.audit){output.audit.browserRows=browserRows;if(browserRows!==rows.length)output.audit.complete=false;}
+ return output;
+}
+export function mapSitcTransit(rows:TransitRow[],origin:string,destination:string,from:string,to:string){
+ const excluded={port:0,date:0,invalid:0};const result=rows.flatMap(row=>{
+  const codes=row.port?.split("->")||[];if(!samePortCode(codes[0]||"",origin)||!samePortCode(codes.at(-1)||"",destination)){excluded.port++;return [];}
+  const etd=publishedDate(row.etdEta?.split("->")[0]);if(etd&&(etd.slice(0,10)<from||etd.slice(0,10)>to)){excluded.date++;return [];}
+  const mapped=parseSitcTransit([row],origin,destination,from,to);if(!mapped.length)excluded.invalid++;return mapped;
+ });const output=auditedSchedules(result,rows.length,excluded);
+ const browserRows=(rows as typeof rows & {browserRows?:number}).browserRows;if(typeof browserRows==="number"&&output.audit){output.audit.browserRows=browserRows;if(browserRows!==rows.length)output.audit.complete=false;}
+ return output;
+}

@@ -1,3 +1,4 @@
+import { auditedSchedules } from "../query-audit";
 import { load } from "cheerio";
 import type { APIRequestContext } from "playwright";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
@@ -9,7 +10,7 @@ type Location={code:string;name:string;locationType:string};
 type Leg={portDepartureCode?:string;portArrivalCode?:string;portDepartureName?:string;portArrivalName?:string;departureDate?:string;arrivalDate?:string;vesselName?:string;voyage?:string;voyageNumber?:string;line?:string;ptPOrder?:number;daysAtSea?:string;depotFromName?:string;depotToName?:string;containerClosingDate?:string;docClosingDate?:string;vgmClosingDate?:string};
 // ZIM's public widget displays these timestamps as local wall-clock values.
 const date=(v:unknown)=>typeof v==="string"?publishedDate(v.replace(/(?:Z|[+-]\d{2}:\d{2})$/,"")):null;
-export function mapZimApi(payload:unknown, origin:Location,destination:Location,originCode:string,destinationCode:string,from:string,to:string):CoscoSchedulePreview[]{
+function parseZimApi(payload:unknown, origin:Location,destination:Location,originCode:string,destinationCode:string,from:string,to:string):CoscoSchedulePreview[]{
  const data=payload as {isSuccess?:boolean;routes?:Leg[][]};
  if(data?.isSuccess===false)throw new Error("RESPONSE_INVALID: ZIM official query rejected");
  if(!Array.isArray(data?.routes))throw new Error("RESPONSE_INVALID: ZIM route array missing");
@@ -51,4 +52,15 @@ export async function queryZimApi(context:APIRequestContext,input:PublicSchedule
  const start=new Date(from);const month=start.toLocaleString("en-US",{month:"long",timeZone:"UTC"});
  const payload=await get("/digitalSchedules/PointToPoint/v2",{PortCode:origin.code,PortDestinationCode:destination.code,Direction:"true",FromDate:start.getUTCDate()+"-"+month+"-"+start.getUTCFullYear(),WeeksAhead:String(Math.ceil((Date.parse(to)-Date.parse(from))/604800000)),CountryCode:"CN"});
  return mapZimApi(payload,origin,destination,canonicalPortCode(input.originPort.locode),canonicalPortCode(input.destinationPort.locode),from,to);
+}
+
+export function mapZimApi(payload:unknown,origin:Location,destination:Location,originCode:string,destinationCode:string,from:string,to:string){
+ const data=payload as {isSuccess?:boolean;routes?:Leg[][]};if(data?.isSuccess===false||!Array.isArray(data?.routes))return parseZimApi(payload,origin,destination,originCode,destinationCode,from,to);
+ const excluded={port:0,date:0,invalid:0};const result=data.routes.flatMap(legs=>{
+  if(!Array.isArray(legs)||!legs.length){excluded.invalid++;return [];}
+  const sorted=[...legs].sort((a,b)=>(a.ptPOrder??0)-(b.ptPOrder??0));
+  if(sorted[0].portDepartureCode!==origin.code.split(";")[0]||sorted.at(-1)!.portArrivalCode!==destination.code.split(";")[0]){excluded.port++;return [];}
+  const etd=date(sorted[0].departureDate);if(etd&&(etd.slice(0,10)<from||etd.slice(0,10)>to)){excluded.date++;return [];}
+  const rows=parseZimApi({routes:[legs]},origin,destination,originCode,destinationCode,from,to);if(!rows.length)excluded.invalid++;return rows;
+ });return auditedSchedules(result,data.routes.length,excluded);
 }

@@ -44,7 +44,7 @@ const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CM
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");
   if (provider.inlandRail?.length) return [provider.resultCount ? provider.resultCount + " 条完整船期" : "", provider.inlandRail.length + " 条含铁路段"].filter(Boolean).join("，");
-  if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条`;
+  if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条${provider.warnings.some(w=>/COUNT_RECONCILIATION_INCOMPLETE/.test(w)) ? "（部分）" : ""}`;
   if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
   if (provider.warnings.some(w => /PUBLICATION_UNSUPPORTED/.test(w))) return "公开表暂未覆盖";
   if (provider.warnings.some(w => /INLAND_UNSUPPORTED/.test(w))) return "内陆段暂未支持";

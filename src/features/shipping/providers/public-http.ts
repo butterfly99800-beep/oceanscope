@@ -1,12 +1,13 @@
+import type { AuditedSchedules } from "./query-audit";
 import { retryPublicRequest } from "./retry-public-request";
 import { createHash } from "node:crypto";
-import { request, type APIRequestContext } from "playwright";
+import { request, type APIRequestContext, type Page } from "playwright";
 import type { Port } from "@prisma/client";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { launchPublicBrowser } from "./public-browser";
 import { liveDateWindow } from "./live-date-window";
 
-export type PublicScheduleInput = { originPort: Pick<Port, "id" | "name" | "locode">; destinationPort: Pick<Port, "id" | "name" | "locode">; departureDate: string; dateTo?: string };
+export type PublicScheduleInput = { originPort: Pick<Port, "id" | "name" | "locode">; destinationPort: Pick<Port, "id" | "name" | "locode">; departureDate: string; dateTo?: string; mode?: string };
 export function publishedDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/\//g, "-").replace(" ", "T");
@@ -26,7 +27,7 @@ export async function responseText(context: APIRequestContext, url: string, form
   if (/Just a moment\.\.\.|<title>Access Denied|Incapsula incident ID|Request Rejected/i.test(text)) throw new Error("VERIFICATION_REQUIRED: official access verification");
   return text;
 }
-export function publicProvider(code: string, pageUrl: string, query: (context: APIRequestContext, input: PublicScheduleInput, from: string, to: string) => Promise<CoscoSchedulePreview[]>) {
+export function publicProvider(code: string, pageUrl: string, query: (context: APIRequestContext, input: PublicScheduleInput, from: string, to: string) => Promise<CoscoSchedulePreview[]>, browserQuery?: (page:Page,input:PublicScheduleInput,from:string,to:string)=>Promise<CoscoSchedulePreview[]>) {
   return { code, async searchSchedule(input: PublicScheduleInput) {
     const started = Date.now();
     const { from, expired } = liveDateWindow(input.departureDate, input.dateTo);
@@ -36,25 +37,29 @@ export function publicProvider(code: string, pageUrl: string, query: (context: A
     const context = await request.newContext({ extraHTTPHeaders: { Referer: pageUrl, "Cache-Control": "no-cache" } });
     let schedules: CoscoSchedulePreview[] = [];
     const warnings: string[] = [];
-    try { schedules = await run(context); }
+    let transport = "http";
+    try { if(input.mode === "browser" && browserQuery)throw new Error("BROWSER_TEST_REQUESTED"); schedules = await run(context); }
     catch (error) {
       const reason = error instanceof Error ? error.message.split("\n")[0] : "QUERY_FAILED";
-      // Missing official locations and malformed data are not solved by changing transport.
-      if (/PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESULT_PORT_MISMATCH|RESPONSE_INVALID|RATE_LIMITED/.test(reason)) warnings.push(`${code}_${reason}`);
+      // A real form may resolve a location differently; session-only HTTP cannot repair parser/location failures.
+      if (/RATE_LIMITED/.test(reason) || (!browserQuery && /PUBLICATION_UNSUPPORTED|PORT_NOT_FOUND|RESULT_PORT_MISMATCH|RESPONSE_INVALID/.test(reason))) warnings.push(`${code}_${reason}`);
       else {
         const browser = await launchPublicBrowser({ channel: "msedge" }).catch(() => null);
         if (!browser) warnings.push(`${code}_${reason}`);
         else try {
-          const session = await browser.newContext();
+          const session = await browser.newContext({serviceWorkers:"block"});
           const page = await session.newPage();
-          await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 25000 });
-          schedules = await run(session.request);
+          page.setDefaultTimeout(12000);
+          if(browserQuery){transport="browser-form";schedules=await browserQuery(page,input,from,to);}
+          else {transport="browser-session-http";await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 25000 });schedules = await run(session.request);}
         } catch (fallbackError) { warnings.push(`${code}_${fallbackError instanceof Error ? fallbackError.message.split("\n")[0] : reason}`); }
         finally { await browser.close(); }
       }
     } finally { await context.dispose(); }
+    const audit=(schedules as AuditedSchedules).audit;
+    if(audit?.complete===false)warnings.push("COUNT_RECONCILIATION_INCOMPLETE: some official rows could not be validated");
     if (!schedules.length && !warnings.length) warnings.push("NO_SCHEDULE_FOUND");
-    return { source: `${code}_LIVE`, schedules, warnings, fromCache: false, durationMs: Date.now() - started };
+    return { source: `${code}_LIVE`, schedules, warnings, audit, transport, fromCache: false, durationMs: Date.now() - started };
   } };
 }
 

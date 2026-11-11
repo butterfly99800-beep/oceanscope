@@ -1,3 +1,4 @@
+import type { QueryAudit } from "@/features/shipping/providers/query-audit";
 import { pruneQueryStates } from "@/features/schedules/lib/pruneQueryStates";
 import { Prisma, ScheduleDataSource, ScheduleStatus, type Port } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -33,6 +34,7 @@ type ProviderFetchStatus = {
   status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error";
   resultCount: number;
   warnings: string[];
+  audits?: Array<QueryAudit | undefined>;
   inlandRail?: InlandRailOption[];
   alternateLoading?: AlternateLoadingOption[];
 };
@@ -116,7 +118,7 @@ function providerTimeoutMs() {
   return Number.isFinite(value) && value >= 10000 ? value : 75000;
 }
 
-type LiveProviderResult = { schedules: CoscoSchedulePreview[]; warnings: string[] };
+type LiveProviderResult = { schedules: CoscoSchedulePreview[]; warnings: string[]; audit?: QueryAudit; audits?: Array<QueryAudit | undefined> };
 
 async function queryDestinations(targets: Port[], query: (port: Port) => Promise<LiveProviderResult>, sequential: boolean): Promise<LiveProviderResult> {
   const run = async (port: Port): Promise<LiveProviderResult> => {
@@ -127,7 +129,7 @@ async function queryDestinations(targets: Port[], query: (port: Port) => Promise
   // Persistent browser profiles cannot be opened by two searches simultaneously.
   if (sequential) { for (const port of targets) results.push(await run(port)); }
   else results.push(...await Promise.all(targets.map(run)));
-  return { schedules: results.flatMap((result) => result.schedules), warnings: results.flatMap((result) => result.warnings) };
+  return { schedules: results.flatMap((result) => result.schedules), warnings: results.flatMap((result) => result.warnings), audits:results.flatMap(result=>result.audits??[result.audit]) };
 }
 
 async function withProviderTimeout(code: string, task: Promise<LiveProviderResult>): Promise<LiveProviderResult> {
@@ -323,6 +325,7 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
             destinationCityUuid: provider.code === "COSCO" ? searchParams.get("destinationCityUuid") || undefined : undefined,
             forceRefresh: provider.code === "COSCO" || searchParams.get("refresh") === "true" ? true : undefined,
           }), provider.code === "CMA" || provider.code === "HAPAG"));
+          status.audits = result.audits;
           status.resultCount = result.schedules.length;
           status.warnings = result.warnings.map((warning) => warning.split("\n")[0].slice(0, 300));
           if (!result.schedules.length) {
@@ -352,8 +355,8 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
           status.resultCount = saved.created + saved.updated;
           status.status = status.resultCount || status.inlandRail?.length || status.alternateLoading?.length ? "success" : "error";
           if (!status.resultCount && !status.inlandRail?.length && !status.alternateLoading?.length && !saved.skippedItems.length) status.warnings.push("RESULT_PORT_MISMATCH: returned locations do not match the requested destination");
-          if (!status.resultCount && saved.skippedItems.length) {
-            status.warnings = [...status.warnings, ...saved.skippedItems.slice(0, 3).map((item) => item.reason)];
+          if (saved.skippedItems.length) {
+            status.warnings = [...status.warnings, "COUNT_RECONCILIATION_INCOMPLETE: some returned rows were not saved", ...saved.skippedItems.slice(0, 3).map((item) => item.reason)];
           }
         } catch (error) {
           status.status = "error";
