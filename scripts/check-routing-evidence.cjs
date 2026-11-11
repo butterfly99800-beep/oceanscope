@@ -28,3 +28,10 @@ const leg={orgLocCd:'CNSHA',destnLocCd:'KRPUS',orgLocNm:'Shanghai',destnLocNm:'B
 const transfer={porLocCd:'CNSHA',pvyLocCd:'USLGB',porLocNm:'Shanghai',pvyLocNm:'Long Beach',fstTrshpPortCd:'KRPUS',transit:[leg,{...leg,orgLocCd:'KRPUS',destnLocCd:'KRPUS',trsPtnModeCd:'TT',vslNm:null},{...leg,orgLocCd:'KRPUS',destnLocCd:'USLGB',vslNm:'B',dpartFnshDt:'2026-11-30T12:00:00'}]};
 assert.equal(mapHmm({grmData:[transfer]},'CNSHA','USLAX','2026-11-08','2026-12-06')[0].direct,false);
 console.log('PASS routing evidence: actual carrier field shapes, same-vessel calls, transfers, internal terminal code, inland and disconnected exclusions');
+
+const sea=(from,to,name)=>({carriage:{...carriage,vessel:{vesselName:name},vesselPortCallStart:{...carriage.vesselPortCallStart,location:{facility:{facilityCode:from}}},vesselPortCallEnd:{...carriage.vesselPortCallEnd,location:{facility:{facilityCode:to}}}}});
+const classified=legs=>parseSchedules({routings:[{routingLegs:legs}]},'Qingdao','Savannah','CNTAO','USSAV')[0];
+assert.equal(classified([sea('CNTSTQQ','KRULSDY','A'),sea('KRULSDY','CNNPOMT','A'),sea('CNNPOMT','USSAVGC','B')]).stopCount,1);
+assert.deepEqual(classified([sea('CNTSTQQ','KRULSDY','A'),sea('KRULSDY','CNNPOMT','A'),sea('CNNPOMT','USSAVGC','B')]).transitPorts,['CNNPOMT']);
+assert.equal(classified([sea('CNTSTQQ','KRULSDY','A'),sea('OTHER','USSAVGC','B')]).direct,null);
+assert.equal(classified([sea('CNTSTQQ','USSAVGC','A')]).direct,true);

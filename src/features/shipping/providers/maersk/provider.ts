@@ -147,24 +147,16 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
     const etd = portClock(start.estimatedTimeOfDeparture);
     const eta = portClock(end.estimatedTimeOfArrival);
     if (!etd || !eta) return;
-    const transitPorts: string[] = [];
-    for (let k = 1; k < legs.length; k++) {
-      const carriage = object(legs[k].carriage);
-      const portCall = object(carriage?.vesselPortCallStart);
-      const location = object(portCall?.location);
-      const facility = object(location?.facility);
-      const mid = stringValue(facility?.facilityCode);
-      if (mid) transitPorts.push(mid);
-    }
-    const verified = classifySeaRouting(legs.map(leg => {
+    // The response is scoped to the verified GEO_ID request. Facility identifiers are
+    // opaque carrier identifiers, not UN/LOCODE prefixes. Verify the full chain as returned.
+    const chain = legs.map(leg => {
       const c = object(leg.carriage);
-      const code = (call: unknown) => {
-        const value = stringValue(object(object(object(call)?.location)?.facility)?.facilityCode)?.slice(0,5);
-        // Maersk's Los Angeles terminal uses its internal USLSA prefix.
-        return value === "USLSA" ? "USLAX" : value;
-      };
+      const code = (call: unknown) => stringValue(object(object(object(call)?.location)?.facility)?.facilityCode);
       return {sea:c?.carriageType === "OCEAN",from:code(c?.vesselPortCallStart),to:code(c?.vesselPortCallEnd),vessel:stringValue(object(c?.vessel)?.vesselName)};
-    }),originLocode,destinationLocode);
+    });
+    const verified = classifySeaRouting(chain, chain[0]?.from || "", chain.at(-1)?.to || "");
+    const normalize = (v: string | null | undefined) => v?.trim().toUpperCase().replace(/\s+/g," ");
+    const transitPorts = verified.direct === false ? chain.slice(1).flatMap((leg,k)=>normalize(leg.vessel)!==normalize(chain[k].vessel) && leg.from ? [leg.from] : []) : [];
     out.push({
       id: `maersk-${i}-${etd.iso}`,
       carrierName: "MAERSK",

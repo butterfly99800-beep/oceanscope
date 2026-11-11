@@ -27,10 +27,23 @@ async function point(context: APIRequestContext, port: PublicScheduleInput["orig
 }
 // Classify only the displayed origin-to-discharge segment, not an omitted inland extension.
 export function evergreenDirectLeg(legs: string[][] | undefined, origin: string, destination: string): boolean | null {
- const first = legs?.[0];
- if (!first || first.length !== 8 || first[0] !== "1" || first[1] !== origin || first[2] !== destination) return null;
- if (!first[5] || /intermodal|rail|truck/i.test(first[5]) || !first[6] || /^-+$/.test(first[6])) return null;
- return true;
+ return evergreenRouting(legs,origin,destination).direct;
+}
+export function evergreenRouting(legs: string[][] | undefined, origin: string, destination: string): {direct:boolean|null;stopCount:number|null} {
+ const unknown={direct:null,stopCount:null};
+ if(!legs?.length || legs.some(l=>l.length!==8))return unknown;
+ const sea=legs.filter(l=>l[5]!=="WAITING");
+ if(!sea.length || sea[0][1]!==origin || sea.at(-1)![2]!==destination)return unknown;
+ // WAITING rows must stay at the connection port; never silently discard inland legs.
+ for(let i=0;i<legs.length;i++) {
+  const l=legs[i];if(i>0&&legs[i-1][2]!==l[1])return unknown;
+  if(l[5]==="WAITING"){if(l[1]!==l[2])return unknown;continue;}
+  if(!l[5]||/intermodal|rail|truck/i.test(l[5])||!l[6]||/^-+$/.test(l[6]))return unknown;
+ }
+ const vessels=sea.map(l=>l[6].trim().match(/^(.*?)\s+(?=[^\s]*\d)[A-Za-z0-9-]+$/)?.[1]?.toUpperCase());
+ if(vessels.some(v=>!v))return unknown;
+ const changes=vessels.slice(1).filter((v,i)=>v!==vessels[i]).length;
+ return {direct:changes===0,stopCount:changes};
 }
 export function mapEvergreen(html: string, originCode: string, destinationCode: string, from: string, to: string): CoscoSchedulePreview[] {
   const $ = load(html);
@@ -62,7 +75,7 @@ export function mapEvergreen(html: string, originCode: string, destinationCode: 
     results.push({ id: scheduleId("EMC", [originCode, pod, vesselName, voyageNumber, etd, eta, rawDetail]), carrierName: "EVERGREEN", originText: clean(2), destinationText: clean(5), originLocode: originCode, destinationLocode: pod,
       vesselName, voyageNumber, serviceName: clean(4) || null, routeName: null, etd, eta, etdTimeKnown: false, etaTimeKnown: false,
       transitDays: pod === destinationCode && /^\d+$/.test(days) ? Number(days) : null,
-      direct: evergreenDirectLeg(legs, clean(2), clean(5)), stopCount: evergreenDirectLeg(legs, clean(2), clean(5)) === true ? 0 : null, transitPorts: [], originFacilityName: null, destinationFacilityName: null,
+      direct: evergreenRouting(legs, clean(2), clean(5)).direct, stopCount: evergreenRouting(legs, clean(2), clean(5)).stopCount, transitPorts: [], originFacilityName: null, destinationFacilityName: null,
       cutOffTime: emcDate(clean(3)), availableTime: null,
       rawText: JSON.stringify({ sourceUrl: ENDPOINT, officialRouting: rawDetail, officialLegs: legs, receipt: clean(1), delivery: clean(6), timeBasis: "official local dates; offset not supplied" }) });
   });

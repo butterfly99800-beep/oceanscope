@@ -42,7 +42,7 @@ export function transitEvidence(source:string,raw:unknown,fallback:string[]=[]):
   legs=root.officialLegs.filter((l):l is string[]=>Array.isArray(l)&&l.length===8&&l[5]!=="WAITING"&&l[1]!==l[2]).map(l=>({from:l[1],to:l[2],name:l[2],departure:d(l[3]),arrival:d(l[4]),vessel:l[6],voyage:"",terminal:""}));
  }
  const result:ScheduleTransitPort[]=[];
- for(let i=0;i<legs.length-1;i++){const a=legs[i],b=legs[i+1];if(!a.to||a.to!==b.from)continue;if(a.vessel&&a.vessel===b.vessel&&a.voyage&&a.voyage===b.voyage)continue;result.push({portCode:source==="COSCO_LIVE_QUERY"||source==="EMC_LIVE_QUERY"?"":a.to,portName:a.name,arrivalTime:a.arrival,departureTime:b.departure,waitingHours:null,nextVesselName:b.vessel||undefined,nextVoyageNumber:b.voyage||undefined,terminal:a.terminal||undefined});}
+ for(let i=0;i<legs.length-1;i++){const a=legs[i],b=legs[i+1];if(!a.to||a.to!==b.from)continue;if(a.vessel&&b.vessel&&a.vessel.trim().toUpperCase()===b.vessel.trim().toUpperCase()&&(source==="MAERSK_LIVE_QUERY"||(a.voyage&&a.voyage===b.voyage)))continue;result.push({portCode:source==="COSCO_LIVE_QUERY"||source==="EMC_LIVE_QUERY"?"":a.to,portName:a.name,arrivalTime:a.arrival,departureTime:b.departure,waitingHours:null,nextVesselName:b.vessel||undefined,nextVoyageNumber:b.voyage||undefined,terminal:a.terminal||undefined});}
  if(result.length)return result;
  return [...new Set(fallback.filter(Boolean))].map(name=>({portName:/^[A-Z]{2}[A-Z0-9]{3}$/.test(name)?"":name,portCode:/^[A-Z]{2}[A-Z0-9]{3}$/.test(name)?name:"",arrivalTime:"",departureTime:"",waitingHours:null}));
 }
