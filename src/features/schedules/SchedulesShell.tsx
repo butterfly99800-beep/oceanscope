@@ -43,7 +43,7 @@ const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CM
 
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");
-  if (provider.inlandRail?.length) return [provider.resultCount ? provider.resultCount + " 条完整船期" : "", provider.inlandRail.length + " 条含铁路段"].filter(Boolean).join("，");
+  if (provider.inlandRail?.length) return `${provider.resultCount + provider.inlandRail.length} 条`;
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条${provider.warnings.some(w=>/COUNT_RECONCILIATION_INCOMPLETE/.test(w)) ? "（部分）" : ""}`;
   if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
   if (provider.warnings.some(w => /PUBLICATION_UNSUPPORTED/.test(w))) return "公开表暂未覆盖";
@@ -379,7 +379,7 @@ export function SchedulesShell() {
                       <td>{row.departure.slice(0,10)}</td><td>{row.vessel} {row.voyage}</td><td>{row.destination}</td><td>{row.arrival.slice(0,10)}</td></tr>)}</tbody>
                   </table></div></details> : [])}
                 {providerStatuses.flatMap(provider => provider.inlandRail?.length ? <details key={provider.code} className="mt-3">
-                  <summary>COSCO 含铁路段方案（目的地到达时间未公布）</summary>
+                  <summary>COSCO 船期详情</summary>
                   <div className="overflow-x-auto"><table className="mt-2 w-full text-left text-sm">
                     <thead><tr>{["船名 / 航次","起运地 / 离港","卸船港 / 到港","内陆场站","运输方式","查询目的地","目的地 ETA"].map(h => <th key={h}>{h}</th>)}</tr></thead>
                     <tbody>{provider.inlandRail.map(row => <tr key={row.id}>

@@ -40,7 +40,7 @@ export async function queryZimApi(context:APIRequestContext,input:PublicSchedule
  async function get(endpoint:string,params:Record<string,string>){return JSON.parse(await responseText(context,API+endpoint+"?"+new URLSearchParams({...params,"subscription-key":config.subscriptionKey})));}
  async function point(port:PublicScheduleInput["originPort"]):Promise<Location>{
   const code=canonicalPortCode(port.locode);
-  const verified:Record<string,string>={CNSHA:"CNSNH",CNYTN:"CNOJA",DEHAM:"GEHAM",VNSGN:"VNHCM"};
+  const verified:Record<string,string>={CNSHA:"CNSNH",CNYTN:"CNOJA",DEHAM:"GEHAM",VNSGN:"VNHCM",CNTAO:"CNQIN",CATOR:"CATRT"};
   for(const name of publicLocationSearchTerms(port.name)){
    const data=await get("/digitalMasterData/Locations/v1/p2p-route",{searchTerm:name,pageIndex:"1",pageSize:"100"});
    if(!Array.isArray(data.results))throw new Error("RESPONSE_INVALID: ZIM locations missing");
