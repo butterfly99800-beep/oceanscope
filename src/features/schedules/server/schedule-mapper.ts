@@ -1,3 +1,4 @@
+import { transitEvidence } from "./transit-evidence";
 import { cmaSiDeadline } from "@/features/shipping/providers/port-clock";
 import type { Prisma } from "@prisma/client";
 import type { SailingSchedule } from "@/features/schedules/types";
@@ -53,7 +54,12 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
       if (evidence.trade === "ANL") carrierLabel = "CMA CGM / ANL（官网分类）";
     } catch { /* Existing page-text evidence has no structured trade classification. */ }
   }
+  let transitDaysBasis: string | undefined;
+  if(schedule.source === "SITC_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
+    try {const raw=JSON.parse(schedule.rawSourceData);if(raw.row?.weekEtd)transitDaysBasis="官网表定航程";}catch{/* Missing source metadata stays blank. */}
+  }
   return {
+    transitDaysBasis,
     id: schedule.id,
     source: schedule.source,
     carrier: carrierLabel,
@@ -66,7 +72,7 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
     originPortCode: schedule.originPort.locode,
     destinationPort: schedule.destinationPort.name,
     destinationPortCode: schedule.destinationPort.locode,
-    transitPorts: schedule.transitPorts.map((item) => ({
+    transitPorts: schedule.transitPorts.length ? schedule.transitPorts.map((item) => ({
       portName: item.port.name,
       portCode: item.port.locode,
       arrivalTime: iso(item.arrivalTime),
@@ -75,7 +81,7 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
       nextVesselName: item.vesselName ?? undefined,
       nextVoyageNumber: item.voyageNumber ?? undefined,
       terminal: item.terminal ?? undefined,
-    })),
+    })) : transitEvidence(schedule.source,schedule.rawSourceData),
     etd: iso(schedule.etd),
     eta: iso(schedule.eta),
     etdTimeKnown: schedule.source !== "OOCL_LIVE_QUERY" && schedule.etdTimeKnown,

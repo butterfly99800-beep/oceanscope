@@ -36,12 +36,15 @@ export function mapPil(payload: unknown, origin: string, destination: string, fr
     if(etd.slice(0,10)<from||etd.slice(0,10)>to){excluded.date++;return;}
     const detail = $("#schedule_info_" + $(tr).attr("id")?.replace("schedule_", ""));
     const seaLegs = detail.find(".fa-ship").length;
+    const connectionDate=(text:string)=>{const m=text.match(/(\d{2})-([A-Za-z]{3})/);if(!m)return "";const candidates=[Number(etd.slice(0,4)),Number(eta.slice(0,4))].filter((v,i,a)=>a.indexOf(v)===i).map(y=>pilDate(`${m[1]}-${m[2]}-${y}`)).filter((v):v is string=>!!v&&v>=etd&&v<=eta);return candidates.length===1?candidates[0].slice(0,10):"";};
+    const connections=detail.find("tr").toArray().flatMap(node=>{const current=$(node);if(!current.find(".fa-anchor").length)return [];const nextShip=current.nextAll("tr").filter((_,r)=>$(r).find(".fa-ship").length>0).first().children("td");const vessel=nextShip.eq(2).text().trim(),voyage=nextShip.eq(3).text().trim();return [{portName:current.children("td").last().text().trim(),portCode:"",arrivalTime:connectionDate(current.prev("tr").text()),departureTime:connectionDate(current.next("tr").text()),waitingHours:null,nextVesselName:/^(Water|Truck|Rail)$/i.test(vessel)?undefined:vessel||undefined,nextVoyageNumber:/^(Water|Truck|Rail)$/i.test(voyage)?undefined:voyage||undefined}];});
+
     const vesselName = value(6) || null, voyageNumber = value(9) || null;
     schedules.push({ id: scheduleId("PIL", [origin, destination, vesselName, voyageNumber, etd, eta, detail.text()]), carrierName: "PIL", originText: value(1), destinationText: value(4), originLocode: origin, destinationLocode: destination,
       vesselName, voyageNumber, serviceName: value(7) || null, routeName: null, etd, eta, etdTimeKnown: false, etaTimeKnown: false,
       transitDays: /^\d+$/.test(value(10)) ? Number(value(10)) : null, direct: seaLegs ? seaLegs === 1 : null, stopCount: seaLegs ? seaLegs - 1 : null,
-      transitPorts: [], originFacilityName: null, destinationFacilityName: null, cutOffTime: null, availableTime: null,
-      rawText: JSON.stringify({ sourceUrl: API + "schedules-point2point.php", localVoyage: value(8), officialRouting: detail.text().replace(/\s+/g, " ").trim(), timeBasis: "official local dates; offset not supplied" }) });
+      transitPorts: connections.map(p=>p.portName), originFacilityName: null, destinationFacilityName: null, cutOffTime: null, availableTime: null,
+      rawText: JSON.stringify({ sourceUrl: API + "schedules-point2point.php", localVoyage: value(8), oceanScopeTransit: connections, officialRouting: detail.text().replace(/\s+/g, " ").trim(), timeBasis: "official local dates; offset not supplied" }) });
   });
   const result=auditedSchedules(schedules,$('tr[id^="schedule_"]').length,excluded);
   if(typeof data.browserRows==="number"&&result.audit){result.audit.browserRows=data.browserRows;if(data.browserRows!==result.audit.received)result.audit.complete=false;}

@@ -51,7 +51,7 @@ export interface ScheduleTransitPort {
   portCode: string;
   arrivalTime: string;
   departureTime: string;
-  waitingHours: number;
+  waitingHours: number | null;
   nextVesselName?: string;
   nextVoyageNumber?: string;
   terminal?: string;
@@ -78,6 +78,7 @@ export interface SailingSchedule {
   originalEtd?: string;
   originalEta?: string;
   transitDays: number | null;
+  transitDaysBasis?: string;
   direct: boolean | null;
   stopCount: number | null;
   cargoNature?: string | null;

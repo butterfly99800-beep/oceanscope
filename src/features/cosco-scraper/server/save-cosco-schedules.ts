@@ -1,3 +1,4 @@
+import { withTransitEvidence } from "@/features/schedules/server/transit-evidence";
 import { createHash } from "node:crypto";
 ﻿import { Prisma, type Port } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUE
 const refreshedSources = new Set<string>(["MSC_LIVE_QUERY", "MAERSK_LIVE_QUERY", "HAPAG_LIVE_QUERY", "CMA_LIVE_QUERY"]);
 const formatPrefix = "port-v2:";
 export function currentScheduleFormat(source: string, reference: string | null) {
-  return !refreshedSources.has(source) || Boolean(reference?.startsWith(formatPrefix));
+  return source === "HMM_LIVE_QUERY" ? Boolean(reference?.startsWith("hmm-v3:")) : !refreshedSources.has(source) || Boolean(reference?.startsWith(formatPrefix));
 }
 
 type SaveOptions = { mode?: "skipDuplicates" | "updateDuplicates"; originPort?: Port; destinationPort?: Port; source?: LiveScheduleSource; carrierCode?: string; carrierName?: string };
@@ -86,8 +87,8 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     lastUpdatedAt: new Date(),
     source,
     fetchedAt: new Date(),
-    rawSourceData: item.rawText,
-    sourceReference: ((refreshedSources.has(source) ? formatPrefix : "") + item.id).slice(0, 160),
+    rawSourceData: withTransitEvidence(source, item.rawText, item.direct === true ? [] : item.transitPorts),
+    sourceReference: ((source === "HMM_LIVE_QUERY" ? "hmm-v3:" : refreshedSources.has(source) ? formatPrefix : "") + item.id).slice(0, 160),
     routingKey: preservesRouting(item, source) ? createHash("sha256").update(item.id).digest("hex") : "",
   };
 }

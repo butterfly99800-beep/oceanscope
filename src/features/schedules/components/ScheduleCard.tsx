@@ -30,7 +30,7 @@ export function ScheduleTimeline({ schedule }: { schedule: SailingSchedule }) {
       </div>
       {schedule.transitPorts.length ? (
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-          中转：{schedule.transitPorts.map((port) => <span key={port.portCode} className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">{port.portName} {port.portCode}</span>)}
+          中转：{schedule.transitPorts.map((port,index) => <span key={`${port.portCode}-${index}`} className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">{port.portName} {port.portCode}</span>)}
         </div>
       ) : null}
     </div>

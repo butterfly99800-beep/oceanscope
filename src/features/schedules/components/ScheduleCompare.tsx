@@ -18,7 +18,7 @@ export function ScheduleCompareDrawer({ open, schedules, onClose }: { open: bool
     { label: "ETA", value: (s) => s.eta.slice(0, 16).replace("T", " ") },
     { label: "航程天数", value: (s) => s.transitDays !== null ? `${s.transitDays} 天` : null },
     { label: "中转次数", value: (s) => s.stopCount !== null ? `${s.stopCount} 次` : null },
-    { label: "中转港", value: (s) => s.transitPorts.map((p) => p.portCode).join(" / ") || null },
+    { label: "中转港", value: (s) => s.transitPorts.map((p) => [p.portName,p.portCode].filter(Boolean).join(" ")).join(" / ") || null },
     { label: "截载时间", value: (s) => s.cutOffTime ? s.cutOffTime.slice(0, 16).replace("T", " ") : null },
     { label: "货物类型", value: (s) => s.cargoNature ?? null },
   ];

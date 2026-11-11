@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAcquisitionTime, sourceLabel } from "../lib/displayTimes";
 import { Download, GitCompare, Heart, Map, X } from "lucide-react";
 import Link from "next/link";
 import type { SailingSchedule } from "@/features/schedules/types";
@@ -8,7 +9,7 @@ function fmt(value: string | null | undefined, timeKnown = true) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return `${date.toISOString().slice(0, 10)}${timeKnown ? ` ${date.toISOString().slice(11, 16)}` : ""}`;
+  return value.slice(0,timeKnown && value.length>10 ? 16 : 10).replace("T"," ");
 }
 
 function Pair({ label, value }: { label: string; value: string | null | undefined }) {
@@ -43,9 +44,9 @@ export function ScheduleDetailsPanel({ schedule, favorite, comparing, onClose, o
           <Pair label="货物类型" value={schedule.cargoNature} />
           <Pair label="ETD" value={fmt(schedule.etd, schedule.etdTimeKnown !== false)} />
           <Pair label="ETA" value={fmt(schedule.eta, schedule.etaTimeKnown !== false)} />
-          <Pair label="航程" value={schedule.transitDays !== null ? `${schedule.transitDays} 天` : null} />
-          <Pair label="数据获取时间" value={fmt(schedule.lastUpdated)} />
-          <Pair label="数据来源" value={schedule.source} />
+          <Pair label={schedule.transitDaysBasis || "航程"} value={schedule.transitDays !== null ? `${schedule.transitDays} 天` : null} />
+          <Pair label="数据获取时间（北京时间）" value={formatAcquisitionTime(schedule.lastUpdated)} />
+          <Pair label="数据来源" value={sourceLabel(schedule.source,schedule.carrier)} />
         </Section>
         <Section title="关键时间节点">
           {[
@@ -55,7 +56,7 @@ export function ScheduleDetailsPanel({ schedule, favorite, comparing, onClose, o
             { label: "ETA", value: schedule.eta, timeKnown: schedule.etaTimeKnown !== false },
           ].filter((item) => Boolean(item.value)).map((item) => <div key={item.label} className="flex gap-3 text-sm"><span className="mt-1 h-2 w-2 rounded-full bg-ocean-500" /><div><b className="text-ink">{item.label}</b><p className="text-slate-500">{fmt(item.value, item.timeKnown)}</p></div></div>)}
         </Section>
-        {schedule.transitPorts.length ? <Section title="中转信息">{schedule.transitPorts.map((port) => <div key={port.portCode} className="rounded-md bg-slate-50 p-3 text-sm"><b>{port.portName} {port.portCode}</b><p className="mt-1 text-slate-500">到港 {fmt(port.arrivalTime)} · 离港 {fmt(port.departureTime)} · 等待 {port.waitingHours} 小时</p>{port.nextVesselName ? <p className="text-slate-500">后续船名航次：{port.nextVesselName} {port.nextVoyageNumber}</p> : null}</div>)}</Section> : null}
+        {schedule.transitPorts.length ? <Section title="中转信息">{schedule.transitPorts.map((port,index) => <div key={`${port.portCode}-${index}`} className="rounded-md bg-slate-50 p-3 text-sm"><b>{port.portName} {port.portCode}</b><Pair label="到港" value={fmt(port.arrivalTime)} /><Pair label="离港" value={fmt(port.departureTime)} /><Pair label="中转码头" value={port.terminal} />{port.waitingHours !== null ? <Pair label="等待时间" value={`${port.waitingHours} 小时`} /> : null}{port.nextVesselName ? <p className="text-slate-500">后续船名航次：{port.nextVesselName} {port.nextVoyageNumber}</p> : null}</div>)}</Section> : null}
         {schedule.terminal || schedule.destinationTerminal ? <Section title="码头与服务"><Pair label="装货港码头" value={schedule.terminal} /><Pair label="卸货港码头" value={schedule.destinationTerminal} /></Section> : null}
         <div className="grid gap-2">
           <button type="button" onClick={() => onToggleFavorite(schedule.id)} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-700 hover:border-ocean-500 hover:text-ocean-700"><Heart className="h-4 w-4" fill={favorite ? "currentColor" : "none"} />{favorite ? "取消收藏" : "收藏船期"}</button>

@@ -15,7 +15,7 @@ function parseSitc(rows: Row[], origin: string, destination: string, from: strin
   return [{ id: scheduleId("SITC", row), carrierName: "SITC", originLocode: row.polCode, destinationLocode: row.podCode, originText: row.polName, destinationText: row.podName,
    etd, eta, etdTimeKnown: false, etaTimeKnown: false, vesselName: row.vesselName || null, voyageNumber: row.voyageNo ? row.voyageNo + (row.voyageLeg || "") : null,
    serviceName: row.serviceLineCode || null, routeName: null, direct: true, stopCount: 0, transitPorts: [],
-   transitDays: !row.ctd && !row.cta && Number.isInteger(row.underway) ? row.underway! : null,
+   transitDays: Number.isInteger(row.underway) && row.underway! >= 0 ? row.underway! : null,
    originFacilityName: row.polTerminalName || null, destinationFacilityName: row.podTerminalName || null, cutOffTime: null, availableTime: null,
    rawText: JSON.stringify({ sourceUrl: ROOT + "/api/equery/voyageInfo/searchPlan", row, scope: "official direct sailing search", timeBasis: "official local dates; current dates preferred over proforma dates" }) }];
  });

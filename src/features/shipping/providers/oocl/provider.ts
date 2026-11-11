@@ -77,7 +77,9 @@ function parseService(value: string | null) {
 
 function parseTransitPorts(text: string) {
   const match = text.match(/Transit via\s+([^\n]+)/i);
-  return match?.[1] ? [match[1].trim()] : [];
+  if(match?.[1])return [match[1].trim()];
+  const blocks=text.split(/(?=Service:)/).filter(block=>/POL:/.test(block)&&/POD:/.test(block));
+  return blocks.slice(0,-1).flatMap((block,i)=>{const pod=detailValue(block,"POD");const next=detailValue(blocks[i+1],"POL");return pod&&next&&pod.toLowerCase()===next.toLowerCase()?[pod]:[];});
 }
 
 function parseDetailText(text: string, index: number, baseDate: string, input: OoclProviderSearchInput): CoscoSchedulePreview | null {

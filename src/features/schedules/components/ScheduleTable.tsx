@@ -96,7 +96,7 @@ export function ScheduleTable({ schedules, selectedId, onSelect }: { schedules: 
                         </div>
                         <div className="mt-2 flex items-center justify-center gap-1 text-slate-700">
                           <CalendarDays className="h-4 w-4" />
-                          <span>{schedule.transitDays !== null ? `在途 ${schedule.transitDays} 天` : "航程未提供"}</span>
+                          <span>{schedule.transitDays !== null ? `${schedule.transitDaysBasis ? "表定" : "在途"} ${schedule.transitDays} 天` : "航程未提供"}</span>
                         </div>
                       </div>
                       <div className="text-center">
