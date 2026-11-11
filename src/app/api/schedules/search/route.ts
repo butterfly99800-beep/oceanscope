@@ -1,3 +1,4 @@
+import { scheduleDateWindows } from "@/features/shipping/providers/query-windows";
 import type { QueryAudit } from "@/features/shipping/providers/query-audit";
 import { pruneQueryStates } from "@/features/schedules/lib/pruneQueryStates";
 import { Prisma, ScheduleDataSource, ScheduleStatus, type Port } from "@prisma/client";
@@ -313,18 +314,33 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
         status.status = "fetching";
         try {
           const targets = provider.code === "COSCO" || provider.code === "ONE" ? [destinationPort] : destinationPorts;
-          const result = await withProviderTimeout(provider.code, queryDestinations(targets, (target) => provider.searchSchedule({
+          const windowResults: LiveProviderResult[] = [];
+          const windows = dateFrom && dateTo && Date.parse(dateTo)-Date.parse(dateFrom)>=28*86400000
+            ? scheduleDateWindows(dateFrom,dateTo) : [{from:dateFrom || "",to:dateTo || ""}];
+          for (const window of windows) {
+            try {
+              windowResults.push(await withProviderTimeout(provider.code, queryDestinations(targets, (target) => provider.searchSchedule({
             originPort,
             destinationPort: target,
-            departureDate: (dateFrom ?? "").slice(0, 10),
-            dateTo: dateTo || undefined,
+            departureDate: window.from.slice(0, 10),
+            dateTo: window.to || undefined,
             mode: provider.code === "COSCO" ? frontendScraperMode() : undefined,
             originOverride: provider.code === "COSCO" ? searchParams.get("originCity") || undefined : undefined,
             destinationOverride: provider.code === "COSCO" ? searchParams.get("destinationCity") || undefined : undefined,
             originCityUuid: provider.code === "COSCO" ? searchParams.get("originCityUuid") || undefined : undefined,
             destinationCityUuid: provider.code === "COSCO" ? searchParams.get("destinationCityUuid") || undefined : undefined,
             forceRefresh: provider.code === "COSCO" || searchParams.get("refresh") === "true" ? true : undefined,
-          }), provider.code === "CMA" || provider.code === "HAPAG"));
+          }), provider.code === "HAPAG")));
+            } catch (error) {
+              windowResults.push({schedules:[],warnings:[`${provider.code}_WINDOW_FAILED: ${window.from}..${window.to}: ${error instanceof Error ? error.message : "query failed"}`]});
+            }
+          }
+          const result: LiveProviderResult = {
+            schedules: [...new Map(windowResults.flatMap(r=>r.schedules).map(s=>[`${s.id}:${s.destinationLocode || s.destinationText}`,s])).values()],
+            warnings: [...new Set(windowResults.flatMap(r=>r.warnings))],
+            audits: windowResults.flatMap(r=>r.audits || [r.audit]),
+          };
+          if(result.schedules.length && result.warnings.some(w=>/_WINDOW_FAILED/.test(w)))result.warnings.push("COUNT_RECONCILIATION_INCOMPLETE: a date window did not finish");
           status.audits = result.audits;
           status.resultCount = result.schedules.length;
           status.warnings = result.warnings.map((warning) => warning.split("\n")[0].slice(0, 300));
@@ -375,6 +391,11 @@ async function runBackgroundFetch(key: string, originPort: Port, destinationPort
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const requestedFrom=searchParams.get("dateFrom")?.slice(0,10), requestedTo=searchParams.get("dateTo")?.slice(0,10);
+    if(requestedFrom && requestedTo) {
+      try { scheduleDateWindows(requestedFrom,requestedTo); }
+      catch { return jsonError("BAD_REQUEST", "查询范围必须为有效日期，且不超过 70 天",400); }
+    }
     const [originPort, destinationPort] = await Promise.all([
       resolvePort(searchParams.get("origin"), searchParams.get("originCity")),
       resolvePort(searchParams.get("destination"), searchParams.get("destinationCity")),

@@ -95,18 +95,19 @@ function validate(criteria: ScheduleSearchCriteria, ports: PortOption[]) {
   const originValue = criteria.originCoscoCity?.uuid || apiPortValue(ports, criteria.originPortId);
   const destinationValue = criteria.destinationCoscoCity?.uuid || apiPortValue(ports, criteria.destinationPortId);
   if (originValue && originValue === destinationValue) errors.destinationPortId = "起运港和目的港不能相同";
+  if (!Number.isInteger(Number(criteria.afterDays)) || Number(criteria.afterDays) < 1 || Number(criteria.afterDays) > 70) errors.afterDays = "请输入 1–70 的整数天数";
   if (!criteria.departureDate) errors.departureDate = "请选择最早出发日期";
   return errors;
 }
 
 function dateWindow(criteria: ScheduleSearchCriteria) {
   const base = new Date(`${criteria.departureDate}T00:00:00Z`);
-  const beforeDays = Number(criteria.beforeDays || 0);
+  const beforeDays = 0;
   const afterDays = Number(criteria.afterDays || criteria.dateRange || 0);
   const from = new Date(base);
   const to = new Date(base);
   from.setUTCDate(base.getUTCDate() - beforeDays);
-  to.setUTCDate(base.getUTCDate() + afterDays);
+  to.setUTCDate(base.getUTCDate() + afterDays - 1);
   return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
 }
 
@@ -171,7 +172,10 @@ export function SchedulesShell() {
   // 直到后端返回 done=true 或超时（最多 3 分钟），实现“先展示已搜到的、再慢慢补全”。
   const pollUntilDone = async (url: string) => {
     const token = ++pollTokenRef.current;
-    const deadline = Date.now() + 240000;
+    const pollingParams = new URL(url, window.location.origin).searchParams;
+    const span = Date.parse(pollingParams.get("dateTo") || "")-Date.parse(pollingParams.get("dateFrom") || "");
+    const windows = Number.isFinite(span) ? Math.max(1,Math.ceil((span/86400000+1)/28)) : 1;
+    const deadline = Date.now() + 240000 * Math.min(3,windows);
     setIsStreaming(true);
     let completed = false;
     let failures = 0;
@@ -350,7 +354,7 @@ export function SchedulesShell() {
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-ink">{criteria.originCoscoCity?.fullName || portLabel(ports, criteria.originPortId)} → {criteria.destinationCoscoCity?.fullName || portLabel(ports, criteria.destinationPortId)}</h2>
-                <p className="mt-1 text-sm text-slate-500">日期范围：前 {criteria.beforeDays || 0} 天 / 后 {criteria.afterDays || criteria.dateRange} 天 · 共 {filtered.length} 条船期{directCount ? ` · ${directCount} 条已确认直达` : ""}{shortest !== null ? ` · 已公布最短航程 ${shortest} 天` : ""}</p>
+                <p className="mt-1 text-sm text-slate-500">日期范围：{criteria.departureDate} 起 {criteria.afterDays} 天 · 共 {filtered.length} 条船期{directCount ? ` · ${directCount} 条已确认直达` : ""}{shortest !== null ? ` · 已公布最短航程 ${shortest} 天` : ""}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={backToQuery} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:border-ocean-500 hover:text-ocean-700"><ArrowLeft className="h-4 w-4" />返回查询</button>
@@ -365,7 +369,7 @@ export function SchedulesShell() {
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-card">
                 <div className="flex flex-wrap gap-2 text-xs">
                   {providerStatuses.map((provider) => (
-                    <span key={provider.code} className={`rounded-full px-3 py-1.5 font-semibold ${provider.status === "success" || provider.status === "cached" ? "bg-emerald-50 text-emerald-700" : provider.status === "fetching" || provider.status === "pending" || (provider.status === "no_results" && providerStatusText(provider) === "未查到船期") ? "bg-ocean-50 text-ocean-700" : "bg-amber-50 text-amber-800"}`} title={provider.warnings.join("\n")}>
+                    <span key={provider.code} className={`rounded-full px-3 py-1.5 font-semibold ${provider.status === "success" || provider.status === "cached" ? "bg-emerald-50 text-emerald-700" : provider.status === "fetching" || provider.status === "pending" || (provider.status === "no_results" && providerStatusText(provider) === "未查到船期") ? "bg-ocean-50 text-ocean-700" : "bg-amber-50 text-amber-800"}`} title={provider.warnings.includes("CMA_SOURCE_DATE_INVALID") ? "官网部分记录的到港日期不晚于离港日期，已排除；当前仅展示日期校验通过的船期。" : provider.warnings.join("\n")}>
                       {carrierLabels[provider.code] || provider.code}：{providerStatusText(provider)}
                     </span>
                   ))}

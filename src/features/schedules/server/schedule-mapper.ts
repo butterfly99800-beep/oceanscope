@@ -55,6 +55,9 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
     } catch { /* Existing page-text evidence has no structured trade classification. */ }
   }
   let transitDaysBasis: string | undefined;
+  if(schedule.source === "CMA_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
+    try {const raw=JSON.parse(schedule.rawSourceData);if(raw.publishedTransit?.days === schedule.transitDays && raw.publishedTransit?.sourceUrl) transitDaysBasis="官网表定航程";}catch{/* Do not infer a transit duration. */}
+  }
   if(schedule.source === "SITC_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
     try {const raw=JSON.parse(schedule.rawSourceData);if(raw.row?.weekEtd)transitDaysBasis="官网表定航程";}catch{/* Missing source metadata stays blank. */}
   }

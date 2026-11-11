@@ -1,3 +1,4 @@
+import { fetchExxTransit } from "./published-transit";
 import { collectOfficialPages } from "../official-pages";
 import { retryPublicRequest } from "../retry-public-request";
 import { cmaSiDeadline } from "../port-clock";
@@ -158,24 +159,32 @@ export async function searchChinaPublic(input: CmaProviderSearchInput): Promise<
     if (process.env.SCHEDULE_DEBUG === "true") console.info("CMA official destination names", JSON.stringify({ rows: sailings.length, destinations: [...new Set(sailings.flatMap((item) => item.destinations.map((port) => port.POD)))] }));
     const target = input.destinationPort.name.split(",")[0].trim().toUpperCase();
     const schedules: CoscoSchedulePreview[] = [];
+    const warnings: string[] = [];
+    let invalidDates = 0;
+    const published = canonicalPortCode(input.destinationPort.locode) === "USLAX" && sailings.some(s => s.row.Line === "EXX")
+      ? await fetchExxTransit().catch(error => { warnings.push("CMA_TRANSIT_INFO_UNAVAILABLE: " + (error instanceof Error ? error.message.split("\n")[0] : "PDF unavailable")); return null; }) : null;
     for (const { row, etd, destinations } of sailings) {
       for (const destination of destinations) {
         const portName = destination.POD?.split(",")[0].trim().toUpperCase();
-        if ((portName !== target && portName !== canonicalPortCode(input.destinationPort.locode)) || !/^\d{4}-\d{2}-\d{2}$/.test(destination.ETA) || destination.ETA < etd) continue;
+        if ((portName !== target && portName !== canonicalPortCode(input.destinationPort.locode)) || !/^\d{4}-\d{2}-\d{2}$/.test(destination.ETA)) continue;
+        if (destination.ETA <= etd) { invalidDates++; continue; }
+        const publishedDays = row.Line === "EXX" && !destination.VIA ? published?.days[canonicalPortCode(input.originPort.locode)] : undefined;
         const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
         schedules.push({
           id: `cma-cn-${row.Id}-${destination.POD}`, carrierName: "CMA CGM", serviceName: text(row.Line), routeName: null,
           vesselName: text(row.VesselCode), voyageNumber: text(row.CarrierVoyage), originText: String(row.POLName), destinationText: destination.POD,
           originLocode: String(row.PlaceCode), destinationLocode: input.destinationPort.locode,
           etd: `${etd}T12:00:00.000Z`, eta: `${destination.ETA}T12:00:00.000Z`, etdTimeKnown: false, etaTimeKnown: false,
-          transitDays: null, direct: null, stopCount: null, transitPorts: destination.VIA ? [destination.VIA] : [],
+          transitDays: publishedDays ?? null, direct: null, stopCount: null, transitPorts: destination.VIA ? [destination.VIA] : [],
           cargoNature: null, cutOffTime: null, siCutOffTime: cmaSiDeadline(row.SiCutOff), availableTime: null, originFacilityName: text(row.TerminalEngName) || text(row.TerminalName), destinationFacilityName: null,
           outboundHaulage: null, inboundHaulage: null,
-          rawText: JSON.stringify({ sourceUrl: ENTRY, trade: chinaTrade(input.destinationPort.locode), fetchedAt: new Date().toISOString(), row, destination }),
+          rawText: JSON.stringify({ sourceUrl: ENTRY, trade: chinaTrade(input.destinationPort.locode), fetchedAt: new Date().toISOString(), row, destination, publishedTransit: publishedDays ? { days: publishedDays, sourceUrl: published!.sourceUrl, fetchedAt: published!.fetchedAt, basis: "官网表定航程" } : undefined }),
         });
       }
     }
-    return { source: "CMA_LIVE", schedules, warnings: schedules.length ? [] : ["NO_SCHEDULE_FOUND"], durationMs: Date.now() - started, fromCache };
+    if(invalidDates) warnings.push(`COUNT_RECONCILIATION_INCOMPLETE: CMA official ETA is not after ETD for ${invalidDates} rows; invalid rows excluded`, "CMA_SOURCE_DATE_INVALID");
+    if(!schedules.length && !warnings.length)warnings.push("NO_SCHEDULE_FOUND");
+    return { source: "CMA_LIVE", schedules, warnings, durationMs: Date.now() - started, fromCache };
   } catch (error) {
     cache.delete(key);
     return { source: "CMA_LIVE", schedules: [], warnings: [`CMA_CHINA_PUBLIC_FAILED: ${error instanceof Error ? error.message.split("\n")[0] : "unknown error"}`], durationMs: Date.now() - started, fromCache: false };
