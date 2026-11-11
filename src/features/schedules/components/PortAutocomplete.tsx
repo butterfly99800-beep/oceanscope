@@ -90,7 +90,7 @@ export function PortAutocomplete({ label, value, selectedId, ports, error, onInp
           {suggestions.length ? suggestions.map((port, index) => (
             <button key={port.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(port); setOpen(false); }} className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left ${index === activeIndex ? "bg-ocean-50" : "hover:bg-slate-50"}`}>
               <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#eaf2fb] text-[#2f68a8]"><Anchor className="h-4 w-4" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{[port.name, port.country].filter(Boolean).join(", ")}</span><span className="block truncate text-xs text-slate-500">{[port.code, /[\u3400-\u9fff]/.test(port.localName || "") ? (port.localName || "").split(",")[0] : ""].filter(Boolean).join(" · ")}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{[port.name, port.country].filter(Boolean).join(", ")}</span><span className="block truncate text-xs text-slate-500">{[port.code, port.coscoCity?.fullName || port.localName].filter(Boolean).join(" · ")}</span></span>
             </button>
           )) : !loadingCosco ? <div className="px-3 py-4 text-sm text-slate-500">未找到匹配城市</div> : null}
         </div>

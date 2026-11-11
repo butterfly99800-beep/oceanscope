@@ -81,12 +81,11 @@ function apiPortValue(ports: PortOption[], id: string) {
 }
 
 function dbPortValueForCosco(ports: PortOption[], coscoCity: NonNullable<ScheduleSearchCriteria["originCoscoCity"]>) {
-  const matched = ports.find((port) => coscoCity.locode && port.code.toLowerCase() === coscoCity.locode.toLowerCase())
-    || ports.find((port) => port.name.toLowerCase() === coscoCity.name.toLowerCase());
-  // COSCO suggestions use synthetic `cosco:<uuid>` ids. When the matching DB
-  // port is not in the first page of loaded ports, send the city name instead
-  // of that synthetic id so the API can still resolve the real port.
-  return matched?.code ?? coscoCity.locode ?? coscoCity.name;
+  // An explicit carrier location must never be replaced by a same-name city.
+  if (coscoCity.locode) return coscoCity.locode;
+  const matches = ports.filter(port => port.name.toLowerCase() === coscoCity.name.toLowerCase()
+    && port.country.toLowerCase() === coscoCity.country.toLowerCase());
+  return matches.length === 1 ? matches[0].code : coscoCity.name;
 }
 
 function validate(criteria: ScheduleSearchCriteria, ports: PortOption[]) {

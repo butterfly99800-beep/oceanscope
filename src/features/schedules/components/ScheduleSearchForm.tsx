@@ -8,13 +8,13 @@ import type { PortOption, ScheduleSearchCriteria } from "@/features/schedules/ty
 
 function labelFor(ports: PortOption[], id: string) {
   const port = findHistoryPort(ports, id);
-  return port ? `${port.name}, ${port.country}` : id;
+  return port ? `${port.name}, ${port.country} (${port.code})` : id;
 }
 
 export function ScheduleSearchForm({ criteria, ports, compact = false, errors, isLoading, onChange, onSubmit, onPortResolved }: { criteria: ScheduleSearchCriteria; ports: PortOption[]; compact?: boolean; errors: Partial<Record<keyof ScheduleSearchCriteria, string>>; isLoading: boolean; onChange: (criteria: ScheduleSearchCriteria) => void; onSubmit: () => void; onPortResolved: (port: PortOption) => void }) {
   const [drafts, setDrafts] = useState<Partial<Record<"originPortId" | "destinationPortId", string>>>({});
-  const originLabel = drafts.originPortId === criteria.originPortId ? drafts.originPortId : (criteria.originCoscoCity ? [criteria.originCoscoCity.name, criteria.originCoscoCity.country].filter(Boolean).join(", ") : labelFor(ports, criteria.originPortId));
-  const destinationLabel = drafts.destinationPortId === criteria.destinationPortId ? drafts.destinationPortId : (criteria.destinationCoscoCity ? [criteria.destinationCoscoCity.name, criteria.destinationCoscoCity.country].filter(Boolean).join(", ") : labelFor(ports, criteria.destinationPortId));
+  const originLabel = drafts.originPortId === criteria.originPortId ? drafts.originPortId : (criteria.originCoscoCity ? `${criteria.originCoscoCity.name}, ${criteria.originCoscoCity.country} (${criteria.originCoscoCity.locode || criteria.originCoscoCity.cityCode})` : labelFor(ports, criteria.originPortId));
+  const destinationLabel = drafts.destinationPortId === criteria.destinationPortId ? drafts.destinationPortId : (criteria.destinationCoscoCity ? `${criteria.destinationCoscoCity.name}, ${criteria.destinationCoscoCity.country} (${criteria.destinationCoscoCity.locode || criteria.destinationCoscoCity.cityCode})` : labelFor(ports, criteria.destinationPortId));
   const setPort = (key: "originPortId" | "destinationPortId", port: PortOption) => {
     setDrafts(current => ({...current, [key]: undefined}));
     onPortResolved(port);

@@ -148,26 +148,26 @@ async function withProviderTimeout(code: string, task: Promise<LiveProviderResul
 }
 
 async function resolvePort(value: string | null, carrierCity: string | null) {
-  const candidates = [value, ...(carrierCity?.split(",") ?? [])]
-    .map((item) => item?.trim() ?? "")
-    .filter((item, index, items) => item && !item.startsWith("cosco:") && items.indexOf(item) === index);
-
-  for (const query of candidates) {
-    const exact = await prisma.port.findFirst({
-      where: { OR: [{ id: query }, { locode: query.toUpperCase() }, { name: query }, { nameZh: query }] },
-    });
-    if (exact) return exact;
+  const cityParts = (carrierCity || "").split(",").map(part => part.trim());
+  const cityCode = cityParts.at(-1);
+  const code = cityCode && /^[A-Z]{2}[A-Z0-9]{3}$/.test(cityCode) ? cityCode
+    : value && /^[A-Z]{2}[A-Z0-9]{3}$/.test(value) ? value : undefined;
+  if (code) {
+    const aliases = [["CNSHA", "CNSGH"], ["CNNGB", "CNNBO"], ["CNTAO", "CNQIN"]];
+    const codes = aliases.find(group => group.includes(code)) || [code];
+    // Fail closed when this exact location is absent, rather than using its name.
+    return (await prisma.port.findFirst({ where: { locode: { in: codes } } })) ?? undefined;
   }
-
-  // 名称 contains 兜底（如 "Yantian" -> "Yantian Pt"）；短词不做模糊，防误匹配。
-  for (const query of candidates) {
-    if (query.length < 3) continue;
-    const contains = await prisma.port.findFirst({
-      where: { OR: [{ name: { contains: query } }, { nameZh: { contains: query } }] },
-    });
-    if (contains) return contains;
+  if (value && !value.startsWith("cosco:")) {
+    const byId = await prisma.port.findUnique({ where: { id: value } });
+    if (byId) return byId;
   }
-  return undefined;
+  const name = cityParts[0] || value;
+  if (!name || name.startsWith("cosco:")) return undefined;
+  const matches = await prisma.port.findMany({
+    where: { OR: [{ name }, { nameZh: name }] }, take: 2,
+  });
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function orderBy(sort: string | null): Prisma.SailingScheduleOrderByWithRelationInput {
