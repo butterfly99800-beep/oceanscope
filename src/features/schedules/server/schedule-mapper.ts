@@ -45,7 +45,7 @@ function displaySourcedTime(value: Date | null | undefined, fallbackValue: Date,
 }
 
 export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
-  let carrierLabel = schedule.carrier.name;
+  let carrierLabel = schedule.carrier.code === "MSC" ? "MSC" : schedule.carrier.code === "COSCO" ? "COSCO" : schedule.carrier.name;
   let siCutOffTime = schedule.siCutOffTime?.toISOString() ?? null;
   if (schedule.source === "CMA_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
     try {
