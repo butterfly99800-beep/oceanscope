@@ -51,10 +51,16 @@ assert.equal(out.detailText('<table><tr><td>POL:</td><td>Shanghai</td></tr></tab
     if (index === 5) return {ok:()=>false,status:()=>503};
     return {ok:()=>true,url:()=>url,text:async()=>'<table><tr><td>POL:</td><td>Port '+index+'</td></tr></table>'};
   }}});
-  assert.deepEqual(attempted, Array.from({length:12}, (_, i)=>i));
+  assert.deepEqual(attempted, [0,1,2,3,4,5,5,5,6,7,8,9,10,11]);
   assert.equal(many.texts.length, 11);
   assert.equal(many.texts.at(-1), 'POL:\tPort 11');
   assert(many.warnings.some(w=>w.includes('detail 5')));
+  let retryCalls=0;
+  const recovered=await out.queryOoclHttp({}, {url,html:form('<a id="detail" onclick="toDetail(0)">Details</a>'),http:{post:async()=>{
+    if(++retryCalls===1)throw new Error('Timeout 10000ms exceeded');
+    return {ok:()=>true,url:()=>url,text:async()=>'<table><tr><td>POL:</td><td>Recovered</td></tr></table>'};
+  }}});
+  assert.equal(retryCalls,2);assert.deepEqual(recovered.texts,['POL:\tRecovered']);assert.deepEqual(recovered.warnings,[]);
   const empty = await out.queryOoclHttp({}, {http, url, html:form('No result were found')});
   assert.deepEqual(empty.warnings, ['NO_SCHEDULE_FOUND']);
   assert.equal(calls, 2);

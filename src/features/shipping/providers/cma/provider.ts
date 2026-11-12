@@ -92,7 +92,7 @@ export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderRe
         form.evaluate((element) => (element as HTMLFormElement).submit()),
       ]);
       await page.locator(".cardelem").first().waitFor({ state: "attached", timeout: 45000 }).catch(() => undefined);
-      const rows = await page.locator(".cardelem").evaluateAll((cards): PageRow[] => cards.slice(0, 20).map((card) => {
+      const rows = await page.locator(".cardelem").evaluateAll((cards): PageRow[] => cards.map((card) => {
         const departure = card.querySelector<HTMLElement>(".DepartureDatesCls")?.dataset.eventDate || null;
         const arrival = card.querySelector<HTMLElement>(".ArrivalDatesCls")?.dataset.eventDate || null;
         const portLink = (selector: string) => card.querySelector<HTMLAnchorElement>(selector);

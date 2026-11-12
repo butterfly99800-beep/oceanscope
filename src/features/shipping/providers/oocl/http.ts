@@ -80,7 +80,18 @@ export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRe
           const index = $(link).attr("onclick")?.match(/toDetail\((\d+)\)/)?.[1];
           try {
             if (index === undefined || !$(link).attr("id")) throw new Error("OOCL_HTTP_RESPONSE_INVALID: detail link changed");
-            const detail = await submit(current, { "form:_link_hidden_": $(link).attr("id")!, "form:recordIndex": index });
+            let detail: {html:string;url:string} | undefined;
+            for(let attempt=0;attempt<3;attempt++) {
+              try { detail=await submit(current,{"form:_link_hidden_":$(link).attr("id")!,"form:recordIndex":index}); break; }
+              catch(error) {
+                const message=error instanceof Error?error.message:"";
+                const transient=/Timeout|ETIMEDOUT|ECONNRESET|ERR_CONNECTION_RESET|socket disconnected before secure TLS|HTTP 50[234]/i.test(message);
+                if(!transient || /403|429|closed|disposed|VERIFICATION|AUTH_REQUIRED/i.test(message) || attempt===2 || Date.now()+1500>=deadline)throw error;
+                await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+              }
+            }
+            if(!detail)throw new Error("OOCL_DETAIL_RETRY_EXHAUSTED");
+            if(requiresVerification(detail.html))throw new Error("OOCL_VERIFICATION_REQUIRED: detail challenge");
             texts.push(detailText(detail.html));
           } catch (error) {
             const reason = error instanceof Error ? error.message.split("\n")[0] : "request failed";

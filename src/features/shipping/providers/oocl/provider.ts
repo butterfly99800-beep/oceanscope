@@ -93,6 +93,7 @@ function parseDetailText(text: string, index: number, baseDate: string, input: O
   const transitDaysText = (detailValue(text, "Total Transit Time") || "").match(/\d+/)?.[0];
   const transitDays = transitDaysText ? Number(transitDaysText) : null;
   if (!originText || !destinationText || !etd || !eta) return null;
+  if(etd.slice(0,10)<input.departureDate.slice(0,10) || (input.dateTo && etd.slice(0,10)>input.dateTo.slice(0,10)))return null;
   const requested = detailValue(text, "Origin");
   const port = { ...input.originPort, nameZh: null };
   const alternateLoading = requested && !matchesSourcePort(originText, port) && matchesSourcePort(requested, port)
@@ -165,14 +166,14 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
     try {
       const page = await browser.newPage({ viewport: { width: 430, height: 900 }, userAgent: MOBILE_UA });
       page.setDefaultTimeout(12000);
-      const entryResponse = await page.goto(OOCL_MOBILE_URL, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(async (error: unknown) => {
+      const entryResponse = await page.goto(OOCL_MOBILE_URL, { waitUntil: "commit", timeout: 30000 }).catch(async (error: unknown) => {
         if (!(error instanceof Error) || !/Timeout|ERR_CONNECTION|ERR_NETWORK/i.test(error.message)) throw error;
-        return page.goto(OOCL_MOBILE_URL, { waitUntil: "domcontentloaded", timeout: 20000 });
+        return page.goto(OOCL_MOBILE_URL, { waitUntil: "commit", timeout: 30000 });
       });
       if (entryResponse && !entryResponse.ok()) {
         return { source: "OOCL_LIVE", schedules: [], warnings: [`OOCL_PUBLIC_PAGE_FAILED: official mobile entry HTTP ${entryResponse.status()}`], durationMs: Date.now() - started, fromCache: false };
       }
-      await page.waitForTimeout(1500);
+      await page.locator("body").waitFor({state:"attached",timeout:20000});
       if (/\[QF17\]/i.test(await page.locator("body").innerText())) throw new Error("OOCL_AUTH_REQUIRED: QF17");
       if (await detectHumanVerification(page)) {
         return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL_CAPTCHA_REQUIRED"], durationMs: Date.now() - started, fromCache: false };
@@ -188,7 +189,7 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
       const details = page.locator("a:visible").filter({ hasText: /^\s*Details\s*$/i }).first();
       const empty = page.getByText(/no\s+results?\s+(?:(?:were|was|are)\s+)?found/i).first();
       const navigate = async (control: import("playwright").Locator) => {
-        await Promise.all([page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20000 }), control.click()]);
+        await Promise.all([page.waitForNavigation({ waitUntil: "commit", timeout: 30000 }), control.click()]);
       };
       await navigate(page.locator("#form\\:goToOriginList"));
       for (let transition = 0; transition < 3; transition++) {
@@ -210,6 +211,7 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
         destinationCode: canonicalPortCode(input.destinationPort.locode), date: mobileDate,
       }, { http: page.request, html: await page.content(), url: page.url(), fields });
       warnings.push(...result.warnings);
+      if(result.warnings.some(w=>/DETAIL_FAILED/.test(w)))warnings.push("COUNT_RECONCILIATION_INCOMPLETE: official detail requests did not all finish");
       for (const text of result.texts) {
         const item = parseDetailText(text, schedules.length + 1, input.departureDate, input);
         if (item && (item.alternateLoading || matchesSourcePort(item.originText, { ...input.originPort, nameZh: null }))
@@ -255,6 +257,9 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
         return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL_LOCAL_WORKER_UNAVAILABLE: check local worker and SSH tunnel"], fromCache: false, durationMs: Date.now() - started };
       }
     }
+    // Browser form first: retain its session when reading official detail responses.
+    const browserResult = await OOCLSingleAttempt.searchSchedule(input).catch((error):OoclProviderResult=>({source:"OOCL_LIVE",schedules:[],warnings:["OOCL_BROWSER_FAILED: "+(error instanceof Error?error.message.split("\n")[0]:"launch failed")],durationMs:Date.now()-started,fromCache:false}));
+    if(browserResult.schedules.length || browserResult.warnings.includes("NO_SCHEDULE_FOUND"))return browserResult;
     let httpFailure = "";
     try {
       const [origin, destination] = await Promise.all([toOoclPortValue(input.originPort), toOoclPortValue(input.destinationPort)]);
@@ -282,12 +287,12 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
         { ...input.destinationPort, name: officialPortName(input.destinationPort), locode: canonicalPortCode(input.destinationPort.locode) },
         input.departureDate.slice(0,10), to);
       if (published.schedules.length) return { source:"OOCL_LIVE", ...published,
-        warnings: ["OOCL_PDF_SOURCE: published service loops", ...published.warnings], durationMs:Date.now()-started, fromCache:false };
+        warnings: ["OOCL_PDF_SOURCE: published service loops", ...browserResult.warnings, ...published.warnings], durationMs:Date.now()-started, fromCache:false };
       if (httpFailure === "NO_SCHEDULE_FOUND") return { source: "OOCL_LIVE", schedules: [],
         warnings: [httpFailure, ...published.warnings], durationMs: Date.now() - started, fromCache: false };
       if (published.warnings.length) httpFailure += "; " + published.warnings.join(", ");
     }
-    const first = await OOCLSingleAttempt.searchSchedule(input);
+    const first = browserResult;
     first.durationMs = Date.now() - started;
     // Only transient navigation/transition failures get one clean-session retry.
     // Never retry an access rejection, CAPTCHA or already returned partial data.

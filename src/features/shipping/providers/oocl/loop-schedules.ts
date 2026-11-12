@@ -27,7 +27,7 @@ function documentText(code: string) {
     try {
       await writeFile(file, pdf);
       return await new Promise<string>((resolve,reject) => {
-        execFile(pdfReader(), ["-raw",file,"-"], {encoding:"utf8",timeout:10000,maxBuffer:2000000}, (error,out) => error ? reject(new Error("OOCL_PDF_READER_FAILED: check pdftotext")) : resolve(out));
+        execFile(pdfReader(), [process.platform === "win32" ? "-table" : "-layout",file,"-"], {encoding:"utf8",timeout:10000,maxBuffer:2000000}, (error,out) => error ? reject(new Error("OOCL_PDF_READER_FAILED: check pdftotext")) : resolve(out));
       });
     } finally { await unlink(file).catch(()=>undefined); await rmdir(dir).catch(()=>undefined); }
   })().finally(()=>pending.delete(code));
@@ -95,7 +95,7 @@ export async function queryServiceLoops(origin:LoopPort,destination:LoopPort,fro
   for (let index = 0; index < loops.length; index += 3) {
     const batch = loops.slice(index, index + 3);
     const results = await Promise.allSettled(batch.map(async loop =>
-      parseLoop(await documentText(loop), loop, origin, destination, from, to)));
+      parseLoopColumns(await documentText(loop), loop, origin, destination, from, to)));
     results.forEach((result, offset) => {
       if (result.status === "fulfilled") schedules.push(...result.value);
       else warnings.push(batch[offset] + ": " + String(result.reason));
@@ -103,4 +103,20 @@ export async function queryServiceLoops(origin:LoopPort,destination:LoopPort,fro
     if (warnings.some(warning => warning.includes("OOCL_PDF_HTTP_429"))) break;
   }
   return { schedules, warnings };
+}
+
+// Preserve empty vessel columns rather than discarding other vessels on the same row.
+export function parseLoopColumns(text:string, loop:string, origin:LoopPort, destination:LoopPort, from:string,to:string) {
+  const stamp=text.match(/Last Update\s+Date:\s*\d{2}-[A-Za-z]{3}-\d{4}/)?.[0].replace(/\s+/g," ");
+  if(!stamp)throw new Error("OOCL_PDF_RESPONSE_INVALID: publication date missing");
+  const lines=text.split(/\r?\n/), output:CoscoSchedulePreview[]=[];
+  let starts:number[]=[], columns:string[][]=[];
+  const flush=()=>{for(const col of columns)output.push(...parseLoop(stamp+"\n"+col.join("\n"),loop,origin,destination,from,to));};
+  for(const line of lines){
+    const headers=[...line.matchAll(/Vessel Name/g)];
+    if(headers.length){flush();starts=headers.map(m=>m.index!);starts[0]=0;columns=starts.map(()=>[]);}
+    if(!starts.length || !line.trim() || /Copyright|Last Update|Infringement/.test(line))continue;
+    starts.forEach((start,i)=>{const value=line.slice(start,starts[i+1]).trim();if(value)columns[i].push(value);});
+  }
+  flush();return [...new Map(output.map(row=>[row.id,row])).values()];
 }
