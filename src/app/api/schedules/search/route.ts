@@ -23,9 +23,7 @@ import { EMCProvider } from "@/features/shipping/providers/emc/provider";
 import { YMLProvider } from "@/features/shipping/providers/yml/provider";
 import { HMMProvider } from "@/features/shipping/providers/hmm/provider";
 import { KMTCProvider } from "@/features/shipping/providers/kmtc/provider";
-import { PILProvider } from "@/features/shipping/providers/pil/provider";
 import { ZIMProvider } from "@/features/shipping/providers/zim/provider";
-import { SITCProvider } from "@/features/shipping/providers/sitc/provider";
 
 const statusMap: Record<string, ScheduleStatus> = { "正常": "NORMAL", NORMAL: "NORMAL", "预计延误": "EXPECTED_DELAY", EXPECTED_DELAY: "EXPECTED_DELAY", "已延误": "DELAYED", DELAYED: "DELAYED", "即将截关": "CUTOFF_SOON", CUTOFF_SOON: "CUTOFF_SOON", "已取消": "CANCELLED", CANCELLED: "CANCELLED" };
 // 记录每个(起运|目的|日期)键的实时抓取状态，用于前端轮询补全。
@@ -53,11 +51,9 @@ const liveSources: ScheduleDataSource[] = [
   ScheduleDataSource.YML_LIVE_QUERY,
   ScheduleDataSource.HMM_LIVE_QUERY,
   ScheduleDataSource.KMTC_LIVE_QUERY,
-  ScheduleDataSource.PIL_LIVE_QUERY,
-  ScheduleDataSource.SITC_LIVE_QUERY,
   ScheduleDataSource.ZIM_LIVE_QUERY,
 ];
-const providers = [COSCOProvider, OOCLProvider, CMAProvider, MAERSKProvider, HAPAGProvider, MSCProvider, ONEProvider, EMCProvider, YMLProvider, HMMProvider, KMTCProvider, PILProvider, SITCProvider, ZIMProvider] as const;
+const providers = [COSCOProvider, OOCLProvider, CMAProvider, MAERSKProvider, HAPAGProvider, MSCProvider, ONEProvider, EMCProvider, YMLProvider, HMMProvider, KMTCProvider, ZIMProvider] as const;
 
 function sourceForProvider(code: string) {
   if (code === "ZIM") return ScheduleDataSource.ZIM_LIVE_QUERY;
@@ -187,11 +183,11 @@ function baseWhere(searchParams: URLSearchParams, originPortId?: string, destina
   const minReliability = searchParams.get("minReliability");
   const maxTransitDays = searchParams.get("maxTransitDays");
   return {
-    source: { not: "SEED" },
+    source: { notIn: ["SEED", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY"] },
     ...(originPortId ? { originPortId } : searchParams.get("origin") ? { id: "__none__" } : {}),
     ...(destinationPortId ? { destinationPortId } : searchParams.get("destination") ? { id: "__none__" } : {}),
     ...(direct === "true" ? { direct: true } : direct === "false" ? { direct: false } : {}),
-    ...(carrier ? { carrier: { name: { contains: carrier } } } : {}),
+    carrier: { code: { notIn: ["PIL", "SITC"] }, ...(carrier ? { name: { contains: carrier } } : {}) },
     ...(status && statusMap[status] ? { status: statusMap[status] } : {}),
     ...(minReliability ? { departureReliability: { gte: Number(minReliability) } } : {}),
     ...(maxTransitDays ? { transitDays: { lte: Number(maxTransitDays) } } : {}),

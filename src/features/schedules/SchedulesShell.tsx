@@ -39,7 +39,7 @@ import type { InlandRailOption, AlternateLoadingOption } from "@/features/cosco-
 type ProviderFetchStatus = { alternateLoading?: AlternateLoadingOption[]; inlandRail?: InlandRailOption[]; code: string; status: "pending" | "fetching" | "cached" | "success" | "no_results" | "unavailable" | "error"; resultCount: number; warnings: string[] };
 type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: number }; done: boolean; providers?: ProviderFetchStatus[] };
 
-const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE", EMC: "EVERGREEN", YML: "YANG MING", HMM: "HMM", KMTC: "KMTC", PIL: "PIL", SITC: "SITC", ZIM: "ZIM" };
+const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE", EMC: "EVERGREEN", YML: "YANG MING", HMM: "HMM", KMTC: "KMTC", ZIM: "ZIM" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");

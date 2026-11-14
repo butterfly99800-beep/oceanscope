@@ -23,3 +23,13 @@ backups/
 *.dump
 *.sql.gz
 .env.*.local
+
+# Historical review notes retained locally
+docs/carrier-audit-30-20261111.md
+docs/location-pil-sitc-20261108.md
+docs/public-carriers-20261107.md
+docs/RELEASE-20261029.md
+docs/routing-evidence-20261108.md
+docs/SEVEN-CARRIER-VERIFICATION.md
+docs/zim-whl-20261107.md
+docs/六平台船期集成方案.md
