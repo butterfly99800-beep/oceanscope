@@ -1,3 +1,4 @@
+import { mergeOoclCargoVariants } from "./itinerary";
 import { queryServiceLoops } from "./loop-schedules";
 import type { Port } from "@prisma/client";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
@@ -231,7 +232,7 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
   },
 };
 
-export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
+const OOCLRawProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
   code: "OOCL",
   async searchSchedule(input) {
     const started = Date.now();
@@ -307,4 +308,9 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
       ...(!second.schedules.length && !second.warnings.includes("NO_SCHEDULE_FOUND") ? [httpFailure, ...first.warnings] : []),
       "OOCL_RETRIED_ONCE: transient public form transition was retried once"] };
   },
+};
+
+export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
+ code: "OOCL",
+ async searchSchedule(input) { const result = await OOCLRawProvider.searchSchedule(input); return {...result, schedules: mergeOoclCargoVariants(result.schedules)}; }
 };

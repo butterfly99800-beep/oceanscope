@@ -1,11 +1,13 @@
+import { queryCmaSession } from "./session-client";
+import { parseCmaGlobalHtml } from "./global-parser";
+import { canonicalPortCode, officialPortName } from "@/features/ports/server/source-port-match";
 import type { Port } from "@prisma/client";
 import type { CoscoSchedulePreview } from "@/features/cosco-scraper/types";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
 import { openPublicSession } from "@/features/shipping/providers/public-browser";
 import type { ShippingProvider } from "@/features/shipping/providers/types";
-import { searchChinaPublic, chinaTrade } from "./china-public";
 
-type CmaProviderPort = Pick<Port, "id" | "name" | "locode">;
+type CmaProviderPort = Pick<Port, "name" | "locode"> & { id?: string };
 export type CmaProviderSearchInput = { originPort: CmaProviderPort; destinationPort: CmaProviderPort; departureDate: string; dateTo?: string; forceRefresh?: boolean };
 export type CmaProviderResult = { source: "CMA_LIVE"; schedules: CoscoSchedulePreview[]; warnings: string[]; durationMs: number; fromCache: boolean };
 
@@ -17,24 +19,11 @@ function pageDate(value: string) {
   return Number.isNaN(date.getTime()) ? "" : `${String(date.getUTCDate()).padStart(2, "0")}-${MONTHS[date.getUTCMonth()]}-${date.getUTCFullYear()}`;
 }
 
-function dateOnlyIso(value: string | null) {
-  if (!value) return null;
-  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-  return new Date(Date.UTC(Number(match[3]), Number(match[1]) - 1, Number(match[2]), 12)).toISOString();
-}
-
 async function portDescription(port: CmaProviderPort) {
-  const mapped = (await getCarrierPortMapping("CMA", port.id))?.mappingValue?.trim();
+  const mapped = (port.id ? await getCarrierPortMapping("CMA", port.id) : null)?.mappingValue?.trim();
   if (mapped?.includes(" ; ")) return mapped;
-  return `${port.name.toUpperCase()} ; ${port.locode.slice(0, 2).toUpperCase()} ; ${port.locode.toUpperCase()}`;
+  return `${officialPortName(port).toUpperCase()} ; ${port.locode.slice(0, 2).toUpperCase()} ; ${canonicalPortCode(port.locode).toUpperCase()}`;
 }
-
-type PageRow = {
-  departure: string | null; arrival: string | null; origin: string | null; destination: string | null;
-  originLocode: string | null; destinationLocode: string | null; originTerminal: string | null; destinationTerminal: string | null;
-  vessel: string | null; voyage: string | null; service: string | null; transitDays: number | null; routing: string | null; rawText: string;
-};
 
 async function waitForQueryForm(page: import("playwright").Page, interactive: boolean) {
   const form = page.locator('form[action="/ebusiness/schedules/routing-finder"]').first();
@@ -59,11 +48,25 @@ async function waitForQueryForm(page: import("playwright").Page, interactive: bo
 export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderResult> = {
   code: "CMA",
   async searchSchedule(input) {
-    // The China public schedule tool publishes North America trade and per-voyage POD/ETA details.
-    if (input.originPort.locode.startsWith("CN") && chinaTrade(input.destinationPort.locode)) {
-      return searchChinaPublic(input);
-    }
     const started = Date.now();
+    if(process.env.CMA_USE_LOCAL_WORKER === "true") {
+      try {
+        const token=process.env.CMA_WORKER_TOKEN || process.env.OOCL_WORKER_TOKEN;
+        if(!token||token.length<32)throw new Error("missing token");
+        const response=await fetch(process.env.CMA_WORKER_URL || "http://127.0.0.1:18341/cma/query",{method:"POST",cache:"no-store",redirect:"error",
+          headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+          body:JSON.stringify({originPort:input.originPort,destinationPort:input.destinationPort,departureDate:input.departureDate,dateTo:input.dateTo}),
+          signal:AbortSignal.timeout(180000)});
+        if(!response.ok)throw new Error("worker HTTP "+response.status);
+        const result=await response.json();
+        if(result.source!=="CMA_LIVE"||result.fromCache!==false||!Array.isArray(result.schedules)||!Array.isArray(result.warnings))throw new Error("invalid worker response");
+        return result;
+      }catch{return {source:"CMA_LIVE",schedules:[],warnings:["CMA_LOCAL_WORKER_UNAVAILABLE"],durationMs:Date.now()-started,fromCache:false};}
+    }
+    if (process.env.CMA_USE_BROWSER_SESSION === "true") {
+      try { return await queryCmaSession(input); }
+      catch { return {source:"CMA_LIVE",schedules:[],warnings:["CMA_BROWSER_SESSION_UNAVAILABLE"],durationMs:Date.now()-started,fromCache:false}; }
+    }
     const [origin, destination] = await Promise.all([portDescription(input.originPort), portDescription(input.destinationPort)]);
     // A normal schedule search must never open a verification window.
     const interactive = false;
@@ -85,52 +88,14 @@ export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderRe
         }
       }, { ActualPOLDescription: origin, ActualPODDescription: destination, ActualPOLType: "Port", ActualPODType: "Port" });
       await page.locator("#datepicker").fill(pageDate(input.departureDate));
-      await page.locator("#field").fill("4");
+      await page.locator("#field").fill(String(Math.max(1, Math.min(10, Math.ceil(((Date.parse(input.dateTo || input.departureDate) - Date.parse(input.departureDate)) / 86400000 + 1) / 7)))));
       await page.locator("#IsDeparture").selectOption("True");
       await Promise.all([
         page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60000 }),
         form.evaluate((element) => (element as HTMLFormElement).submit()),
       ]);
       await page.locator(".cardelem").first().waitFor({ state: "attached", timeout: 45000 }).catch(() => undefined);
-      const rows = await page.locator(".cardelem").evaluateAll((cards): PageRow[] => cards.map((card) => {
-        const departure = card.querySelector<HTMLElement>(".DepartureDatesCls")?.dataset.eventDate || null;
-        const arrival = card.querySelector<HTMLElement>(".ArrivalDatesCls")?.dataset.eventDate || null;
-        const portLink = (selector: string) => card.querySelector<HTMLAnchorElement>(selector);
-        const originLink = portLink(".DepartureDatesCls a.capsule-container");
-        const destinationLink = portLink(".ArrivalDatesCls a.capsule-container");
-        const terminal = (selector: string) => portLink(`${selector} a[href*='/terminal/detail/']`)?.textContent?.trim() || null;
-        const labelled = new Map(Array.from(card.querySelectorAll("dt")).map((dt) => [dt.textContent?.trim().toLowerCase(), dt.nextElementSibling?.textContent?.trim() || null]));
-        const hrefCode = (link: HTMLAnchorElement | null) => {
-          const decoded = decodeURIComponent(link?.getAttribute("href") || "");
-          return decoded.match(/;\s*([A-Z]{5})(?:&|$)/)?.[1] || null;
-        };
-        const transit = card.querySelector<HTMLElement>("[id^='Transit_']")?.dataset.value;
-        return {
-          departure, arrival,
-          origin: originLink?.textContent?.replace(/^\s*POL\s*/i, "").trim() || null,
-          destination: destinationLink?.textContent?.replace(/^\s*POD\s*/i, "").trim() || null,
-          originLocode: hrefCode(originLink), destinationLocode: hrefCode(destinationLink),
-          originTerminal: terminal(".DepartureDatesCls"), destinationTerminal: terminal(".ArrivalDatesCls"),
-          vessel: labelled.get("main vessel") || null, voyage: labelled.get("voyage ref.") || null,
-          service: labelled.get("service") || null,
-          transitDays: transit && Number.isFinite(Number(transit)) ? Number(transit) : null,
-          routing: card.querySelector("#Direct")?.textContent?.trim() || null,
-          rawText: card.textContent?.replace(/\s+/g, " ").trim() || "",
-        };
-      }));
-      const schedules = rows.map((row, index): CoscoSchedulePreview | null => {
-        const etd = dateOnlyIso(row.departure); const eta = dateOnlyIso(row.arrival);
-        if (!etd || !eta || !row.origin || !row.destination) return null;
-        const direct = row.routing ? /^direct$/i.test(row.routing) : null;
-        return {
-          id: `cma-${row.voyage || index}-${etd}`, carrierName: "CMA CGM", serviceName: row.service, routeName: null,
-          vesselName: row.vessel, voyageNumber: row.voyage, originText: row.origin, destinationText: row.destination,
-          originLocode: row.originLocode, destinationLocode: row.destinationLocode, etd, eta, etdTimeKnown: false, etaTimeKnown: false,
-          transitDays: row.transitDays, direct, stopCount: null, transitPorts: [], cargoNature: null,
-          cutOffTime: null, availableTime: null, originFacilityName: row.originTerminal, destinationFacilityName: row.destinationTerminal,
-          outboundHaulage: null, inboundHaulage: null, rawText: row.rawText,
-        };
-      }).filter((row): row is CoscoSchedulePreview => Boolean(row));
+      const schedules = parseCmaGlobalHtml(await page.content(), input.departureDate.slice(0,10), (input.dateTo || input.departureDate).slice(0,10));
       const bodyText = await page.locator("body").innerText().catch(() => "");
       const warnings = schedules.length ? [] : [/captcha|verify you are human|access denied|datadome/i.test(bodyText)
         ? "CMA_CAPTCHA_REQUIRED: public page requested human verification."

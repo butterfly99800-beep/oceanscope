@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "OceanScope Public Schedule Bridge",
+  "version": "0.1.0",
+  "description": "Use an explicitly enabled public CMA schedule tab with the local OceanScope worker.",
+  "permissions": [
+    "scripting",
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.cma-cgm.com/*",
+    "http://127.0.0.1:18342/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Enable OceanScope session bridge",
+    "default_popup": "popup.html"
+  }
+}

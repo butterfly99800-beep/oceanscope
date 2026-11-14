@@ -21,9 +21,9 @@ export async function createScheduleWorkbook(schedules:SailingSchedule[]) {
  transfers.addRow(["船期序号","船司","首程船名","首程航次","中转顺序","中转港","港口代码","到港时间（当地）","离港时间（当地）","后续船名","后续航次","码头"]);
  for (const [index,row] of schedules.entries()) {
   const ports=row.transitPorts??[];
-  const excelRow=sheet.addRow([row.carrier,row.originPort,row.originPortCode,row.destinationPort,row.destinationPortCode,row.vesselName,row.voyageNumber,row.serviceName,displayDate(row.etd),displayDate(row.eta),row.transitDays,row.direct===true?"直航":row.direct===false?"中转":null,row.terminal,row.destinationTerminal,displayDate(row.cutOffTime),acquisitionDate(row.lastUpdated),sourceLabel(row.source,row.carrier),ports.map(p=>[p.portName,p.portCode].filter(Boolean).join(" ")).join(" → "),ports.map(p=>p.arrivalTime?.slice(0,16).replace("T"," ")||"").join("\n"),ports.map(p=>p.departureTime?.slice(0,16).replace("T"," ")||"").join("\n"),ports.map(p=>[p.nextVesselName,p.nextVoyageNumber].filter(Boolean).join(" / ")).join("\n"),row.transitDays===null?null:row.transitDaysBasis||"官网公布"]);
+  const excelRow=sheet.addRow([row.carrier,row.originPort,row.originPortCode,row.destinationPort,row.destinationPortCode,row.vesselName,row.voyageNumber,row.serviceName,displayDate(row.etd),displayDate(row.eta),row.transitDays,row.direct===true?"直航":row.direct===false?"中转":null,row.terminal,row.destinationTerminal,displayDate(row.cutOffTime),acquisitionDate(row.lastUpdated),row.sourceDescription || sourceLabel(row.source,row.carrier),ports.map(p=>[p.portName,p.portCode].filter(Boolean).join(" ")).join(" → "),ports.map(p=>p.arrivalTime?.slice(0,16).replace("T"," ")||"").join("\n"),ports.map(p=>p.departureTime?.slice(0,16).replace("T"," ")||"").join("\n"),ports.map(p=>[p.nextVesselName,p.nextVoyageNumber].filter(Boolean).join(" / ")).join("\n"),row.transitDays===null?null:row.transitDaysBasis||"官网公布"]);
   for(const col of [9,10,15,16])excelRow.getCell(col).numFmt=col===16?"yyyy-mm-dd hh:mm:ss":((col===9&&row.etdTimeKnown===false)||(col===10&&row.etaTimeKnown===false)||(col===15&&row.source==="OOCL_LIVE_QUERY"))?"yyyy-mm-dd":"yyyy-mm-dd hh:mm";
-  for(const [i,p] of ports.entries()){const r=transfers.addRow([index+1,row.carrier,row.vesselName,row.voyageNumber,i+1,p.portName,p.portCode,displayDate(p.arrivalTime),displayDate(p.departureTime),p.nextVesselName,p.nextVoyageNumber,p.terminal]);for(const col of [8,9])r.getCell(col).numFmt=(col===8?p.arrivalTime:p.departureTime).length<=10?"yyyy-mm-dd":"yyyy-mm-dd hh:mm";}
+  for(const [i,p] of ports.entries()){const r=transfers.addRow([index+1,row.carrier,row.vesselName,row.voyageNumber,i+1,p.portName,p.portCode,displayDate(p.arrivalTime),displayDate(p.departureTime),p.nextVesselName,p.nextVoyageNumber,p.terminal]);for(const col of [8,9])r.getCell(col).numFmt=((col===8?p.arrivalTime:p.departureTime)||"").length<=10?"yyyy-mm-dd":"yyyy-mm-dd hh:mm";}
  }
 
  const summary=book.addWorksheet("航线汇总"); summary.addRow(["直达／中转","船司","服务","船期条数","已公布开航日期","最短公布航程(天)","最长公布航程(天)"]);
@@ -31,7 +31,27 @@ export async function createScheduleWorkbook(schedules:SailingSchedule[]) {
  const weekly = book.addWorksheet("每周开航汇总");
  weekly.addRow(["开航日", "直达／中转", "船司", "服务", "计划离港日期", "最短公布航程(天)", "最长公布航程(天)"]);
  for (const day of [0,1,2,3,4,5,6,-1]) for (const group of scheduleGroups(schedules.filter(row => departureWeekday(row.etd) === day))) weekly.addRow([departureWeekdays[day] || "日期待确认", group.mode, group.carrier, group.service, group.dates.join("、"), group.minDays, group.maxDays]);
- for(const target of [sheet,summary,weekly,transfers]) { target.getRow(1).font={bold:true,color:{argb:"FFFFFFFF"}};target.getRow(1).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF2862A4"}};target.getRow(1).height=32;target.views=[{state:"frozen",ySplit:1}];target.autoFilter={from:{row:1,column:1},to:{row:1,column:target.columnCount}};target.columns.forEach(c=>{c.width=26;c.alignment={vertical:"top",wrapText:true};}); }
+ for (const target of [sheet,summary,weekly,transfers]) {
+  target.getRow(1).font={bold:true,color:{argb:"FF202020"},size:11};
+  target.getRow(1).height=30;
+  target.views=[{state:"frozen",ySplit:1}];
+  target.autoFilter={from:{row:1,column:1},to:{row:1,column:target.columnCount}};
+  target.columns.forEach((column,index)=>{
+   let width=10,hasValue=false;
+   column.eachCell?.({includeEmpty:false},(cell,rowNumber)=>{
+    if(rowNumber>1&&cell.value!==null&&cell.value!==undefined&&cell.value!=="")hasValue=true;
+    const text=cell.value instanceof Date?"2026-11-14 12:30:00":String(cell.value??"");
+    const measured=Math.max(...text.split(/\n/).map(line=>Array.from(line).reduce((n,c)=>n+(c.charCodeAt(0)>255?2:1),0)));
+    width=Math.max(width,measured+2);
+   });
+   column.width=Math.min(34,width);
+   column.alignment={vertical:"top",wrapText:true};
+   // Hide wholly unpublished optional fields; preserve cell values and stable column addresses.
+   if(target===sheet&&[8,11,12,13,14,15,18,19,20,21,22].includes(index+1))column.hidden=!hasValue;
+  });
+ }
+ if(transfers.rowCount===1)transfers.state="hidden";
+
  return book;
 }
 

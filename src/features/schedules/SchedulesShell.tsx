@@ -48,7 +48,7 @@ function providerStatusText(provider: ProviderFetchStatus) {
   if (provider.warnings.some(w => /MAERSK_CONFIG_REQUIRED/.test(w))) return "缺少查询配置";
   if (provider.warnings.some(w => /PUBLICATION_UNSUPPORTED/.test(w))) return "公开表暂未覆盖";
   if (provider.warnings.some(w => /INLAND_UNSUPPORTED/.test(w))) return "内陆段暂未支持";
-  if (provider.warnings.some(w => /PORT_NOT_FOUND|Geo ID could not be resolved/.test(w))) return "公开入口未匹配到地点";
+  if (provider.warnings.some(w => /PORT_NOT_FOUND|Geo ID could not be resolved/.test(w))) return "未匹配到相关地点";
   if (provider.warnings.some(w => /RESULT_PORT_MISMATCH|Official result port does not match/.test(w))) return "官网返回其他港口";
   if (provider.warnings.some(w => /OOCL_AUTH_REQUIRED/.test(w))) return "官网要求登录后重试";
   if (provider.warnings.some(w => /PARSE_INCOMPLETE|RESPONSE_INVALID/.test(w))) return "官网数据未能完整解析";
@@ -143,7 +143,7 @@ export function SchedulesShell() {
     fetch("/api/ports/search?pageSize=100")
       .then((response) => response.ok ? response.json() as Promise<PortListResponse> : Promise.reject())
       .then(async (payload) => {
-        if (payload.data.length) setPorts(payload.data);
+        if (payload.data.length) setPorts(current => [...new Map([...current, ...payload.data].map(port => [port.id, port])).values()]);
         const missing = [...new Set(savedSearches.flatMap((search) => [search.originPortId, search.destinationPortId]))]
           .filter((key) => !findPort(payload.data, key));
         const resolved = await Promise.all(missing.map(async (key) => {
@@ -211,6 +211,8 @@ export function SchedulesShell() {
   };
 
   const restoreRecentSearch = async (search: RecentScheduleSearch) => {
+    ++pollTokenRef.current;
+    setIsStreaming(false);
     setIsLoading(true);
     setErrors({});
     setQueryError("");
@@ -230,6 +232,7 @@ export function SchedulesShell() {
       setPorts(resolvedPorts);
       setCriteria(next);
       setFilters(initialFilters);
+      setFavoritesOnly(false);
       await runSearch(next, false, resolvedPorts);
     } catch {
       setQueryError("地点加载失败，请稍后重试。");
@@ -369,7 +372,7 @@ export function SchedulesShell() {
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-card">
                 <div className="flex flex-wrap gap-2 text-xs">
                   {providerStatuses.map((provider) => (
-                    <span key={provider.code} className={`rounded-full px-3 py-1.5 font-semibold ${provider.status === "success" || provider.status === "cached" ? "bg-emerald-50 text-emerald-700" : provider.status === "fetching" || provider.status === "pending" || (provider.status === "no_results" && providerStatusText(provider) === "未查到船期") ? "bg-ocean-50 text-ocean-700" : "bg-amber-50 text-amber-800"}`} title={provider.warnings.includes("CMA_SOURCE_DATE_INVALID") ? "官网部分记录的到港日期不晚于离港日期，已排除；当前仅展示日期校验通过的船期。" : provider.warnings.join("\n")}>
+                    <span key={provider.code} className={`rounded-full px-3 py-1.5 font-semibold ${provider.status === "success" || provider.status === "cached" ? "bg-emerald-50 text-emerald-700" : provider.status === "fetching" || provider.status === "pending" ? "bg-ocean-50 text-ocean-700" : provider.status === "no_results" && providerStatusText(provider) === "未查到船期" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-800"}`} title={provider.warnings.includes("CMA_SOURCE_DATE_INVALID") ? "官网部分记录的到港日期不晚于离港日期，已排除；当前仅展示日期校验通过的船期。" : provider.warnings.join("\n")}>
                       {carrierLabels[provider.code] || provider.code}：{providerStatusText(provider)}
                     </span>
                   ))}
@@ -380,16 +383,6 @@ export function SchedulesShell() {
                     <thead><tr>{["查询起运地","实际装船港","离港日期","首程船名 / 航次","最终目的地","预计到达"].map(label => <th key={label}>{label}</th>)}</tr></thead>
                     <tbody>{provider.alternateLoading.map(row => <tr key={row.id}><td>{row.origin}</td><td>{row.loadingPort}</td>
                       <td>{row.departure.slice(0,10)}</td><td>{row.vessel} {row.voyage}</td><td>{row.destination}</td><td>{row.arrival.slice(0,10)}</td></tr>)}</tbody>
-                  </table></div></details> : [])}
-                {providerStatuses.flatMap(provider => provider.inlandRail?.length ? <details key={provider.code} className="mt-3">
-                  <summary>COSCO 船期详情</summary>
-                  <div className="overflow-x-auto"><table className="mt-2 w-full text-left text-sm">
-                    <thead><tr>{["船名 / 航次","起运地 / 离港","卸船港 / 到港","内陆场站","运输方式","查询目的地","目的地 ETA"].map(h => <th key={h}>{h}</th>)}</tr></thead>
-                    <tbody>{provider.inlandRail.map(row => <tr key={row.id}>
-                      <td>{row.vessel} {row.voyage}</td><td>{row.origin} {row.departure.slice(0,10)}</td>
-                      <td>{row.dischargePort} {row.dischargeEta?.slice(0,10)}</td><td>{row.facility}</td>
-                      <td>{row.modes}</td><td>{row.requestedDestination}</td><td>{row.destinationEta}</td>
-                    </tr>)}</tbody>
                   </table></div></details> : [])}
                 {providerStatuses.flatMap(provider => provider.warnings.filter(warning => warning.startsWith("MSC_DATE_ADJUSTED:")).map(warning => <p key={`${provider.code}-${warning}`} className="mt-2 text-xs text-amber-800">{warning.replace("MSC_DATE_ADJUSTED: ", "MSC：")}</p>))}
                 {providerStatuses.filter(provider => provider.status === "success" && provider.warnings.some(warning => /TIMEOUT|DETAIL_FAILED|PARSE_INCOMPLETE|OOCL_PDF_HTTP_|OOCL_PDF_READER_FAILED|OOCL_PDF_RESPONSE_INVALID/.test(warning))).map(provider => <p key={`partial-${provider.code}`} className="mt-2 text-xs text-amber-800">{carrierLabels[provider.code] || provider.code}：已显示获取到的结果，部分方案未能完成获取，可稍后重新查询。</p>)}

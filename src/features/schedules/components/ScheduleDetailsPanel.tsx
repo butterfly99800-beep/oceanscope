@@ -46,7 +46,7 @@ export function ScheduleDetailsPanel({ schedule, favorite, comparing, onClose, o
           <Pair label="ETA" value={fmt(schedule.eta, schedule.etaTimeKnown !== false)} />
           <Pair label={schedule.transitDaysBasis || "航程"} value={schedule.transitDays !== null ? `${schedule.transitDays} 天` : null} />
           <Pair label="数据获取时间（北京时间）" value={formatAcquisitionTime(schedule.lastUpdated)} />
-          <Pair label="数据来源" value={sourceLabel(schedule.source,schedule.carrier)} />
+          <Pair label="数据来源" value={schedule.sourceDescription || sourceLabel(schedule.source,schedule.carrier)} />
         </Section>
         <Section title="关键时间节点">
           {[

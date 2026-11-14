@@ -25,7 +25,7 @@ export async function openPublicSession(carrier: "CMA" | "HAPAG", interactive = 
   const executablePath = [process.env.SCHEDULE_BROWSER_EXECUTABLE_PATH, ...WINDOWS_BROWSER_PATHS]
     .find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));
   const context = await chromium.launchPersistentContext(path.join(process.cwd(), "tmp", "public-sessions", carrier.toLowerCase()), {
-    ...(executablePath ? { executablePath } : {}), headless: !interactive,
+    ...(carrier === "CMA" && process.platform === "win32" ? { channel: "msedge" } : executablePath ? { executablePath } : {}), headless: !interactive,
     viewport: { width: 1440, height: 1000 }, locale: "en-US",
     args: interactive ? ["--window-size=1440,1000"] : [],
   }).catch((error: unknown) => {

@@ -54,6 +54,14 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
       if (evidence.trade === "ANL") carrierLabel = "CMA CGM / ANL（官网分类）";
     } catch { /* Existing page-text evidence has no structured trade classification. */ }
   }
+  let sourceDescription: string | undefined;
+  if (schedule.source === "CMA_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
+    try {
+      const raw = JSON.parse(schedule.rawSourceData);
+      if (raw.sourceUrl === "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery") sourceDescription = "CMA CGM 中国站船期表";
+      else if (/^https:\/\/www\.cma-cgm\.com\/ebusiness\/schedules(?:\/routing-finder)?$/.test(raw.sourceUrl || "")) sourceDescription = "CMA CGM 全球站 Routing Finder";
+    } catch { /* Old page text has no source URL. */ }
+  }
   let transitDaysBasis: string | undefined;
   if(schedule.source === "CMA_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
     try {const raw=JSON.parse(schedule.rawSourceData);if(raw.publishedTransit?.days === schedule.transitDays && raw.publishedTransit?.sourceUrl) transitDaysBasis="官网表定航程";}catch{/* Do not infer a transit duration. */}
@@ -63,6 +71,7 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
   }
   return {
     transitDaysBasis,
+    sourceDescription,
     id: schedule.id,
     source: schedule.source,
     carrier: carrierLabel,

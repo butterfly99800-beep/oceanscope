@@ -89,6 +89,7 @@ export interface SailingSchedule {
   availableTime: string | null;
   lastUpdated: string;
   rawSourceAvailable?: boolean;
+  sourceDescription?: string;
   frequency?: string;
   scheduleStatus?: ScheduleStatus;
   delayHours?: number;

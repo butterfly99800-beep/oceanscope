@@ -53,7 +53,7 @@ async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId:
 }
 
 function preservesRouting(item: CoscoSchedulePreview, source: LiveScheduleSource) {
-  return item.rawText.startsWith('{"officialLegs":') || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(source);
+  return item.rawText.startsWith('{"officialLegs":') || ["OOCL_LIVE_QUERY", "EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(source);
 }
 
 function createScheduleData(item: CoscoSchedulePreview, carrierId: string, originPortId: string, destinationPortId: string, etd: Date, eta: Date, source: LiveScheduleSource): Prisma.SailingScheduleUncheckedCreateInput {

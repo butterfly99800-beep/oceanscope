@@ -1,3 +1,4 @@
+import { ooclItineraryEvidence } from "@/features/shipping/providers/oocl/itinerary";
 import { scheduleDateWindows } from "@/features/shipping/providers/query-windows";
 import type { QueryAudit } from "@/features/shipping/providers/query-audit";
 import { pruneQueryStates } from "@/features/schedules/lib/pruneQueryStates";
@@ -220,7 +221,9 @@ async function listPayload(where: Prisma.SailingScheduleWhereInput, searchParams
 type SourcePort = Pick<Port, "name" | "nameZh" | "locode">;
 function latestScheduleSnapshots<T extends { id: string; source: ScheduleDataSource; originPortId: string; destinationPortId: string; vesselName: string | null; voyageNumber: string | null; serviceName: string | null; frequency: string | null; updatedAt: Date; rawSourceData: Prisma.JsonValue | null; sourceReference: string | null }>(rows: T[]): T[] {
   const latest = new Map<string, T>();
-  const identity = (row: T) => row.vesselName && row.voyageNumber
+  const identity = (row: T) => row.source === "OOCL_LIVE_QUERY" && typeof row.rawSourceData === "string"
+    ? JSON.stringify([row.source,row.originPortId,row.destinationPortId,ooclItineraryEvidence(row.rawSourceData)])
+    : row.vesselName && row.voyageNumber
     ? JSON.stringify([row.source, row.originPortId, row.destinationPortId, row.vesselName, row.voyageNumber, row.serviceName, row.frequency,
       ((typeof row.rawSourceData === "string" && row.rawSourceData.startsWith('{"officialLegs":')) || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(row.source)) ? row.sourceReference : null]) : row.id;
   for (const row of rows) {
@@ -237,6 +240,14 @@ function sourceMatchesPorts(row: { source: ScheduleDataSource; sourceReference: 
   if (!row.rawSourceData) return false;
   const text = typeof row.rawSourceData === "string" ? row.rawSourceData : JSON.stringify(row.rawSourceData);
   const matches = matchesSourcePort;
+  // China regional sailing tables are not global Routing Finder itineraries.
+  // Keep historical rows in the database, but do not serve them as routing results.
+  if (row.source === "CMA_LIVE_QUERY") {
+    try {
+      const raw = JSON.parse(text);
+      if (raw.sourceUrl === "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery") return false;
+    } catch { /* Legacy global page text remains supported. */ }
+  }
   if (row.source === "COSCO_LIVE_QUERY") {
     try {
       type Leg = { pol?: string; pod?: string; polPortCode?: string; podPortCode?: string };

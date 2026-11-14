@@ -17,14 +17,16 @@ require.extensions['.ts'] = (module, filename) => {
 const http = require('node:http');
 const { timingSafeEqual, createHash } = require('node:crypto');
 const { OOCLProvider } = require('../src/features/shipping/providers/oocl/provider.ts');
+const { CMAProvider } = require('../src/features/shipping/providers/cma/provider.ts');
 const token = process.env.OOCL_WORKER_TOKEN;
 if (!token || token.length < 32) throw new Error('Set OOCL_WORKER_TOKEN (at least 32 characters)');
 process.env.OOCL_USE_LOCAL_WORKER = 'false';
+process.env.CMA_USE_LOCAL_WORKER = 'false';
 const digest = value => createHash('sha256').update(value).digest();
 let active = 0;
 http.createServer(async (req, res) => {
   const finish = (status, body) => { res.writeHead(status, {'Content-Type':'application/json'}); res.end(JSON.stringify(body)); };
-  if (req.method !== 'POST' || req.url !== '/query') return finish(404, {});
+  if (req.method !== 'POST' || !['/query', '/cma/query'].includes(req.url)) return finish(404, {});
   if (!timingSafeEqual(digest(req.headers.authorization || ''), digest('Bearer ' + token))) return finish(401, {});
   if (active >= 2) return finish(503, {});
   active++;
@@ -38,8 +40,9 @@ http.createServer(async (req, res) => {
     const port = p => p && /^[A-Z]{2}[A-Z0-9]{3}$/.test(p.locode) && typeof p.name === 'string' && p.name.length <= 256;
     if (!port(input.originPort) || !port(input.destinationPort) || !/^\d{4}-\d{2}-\d{2}$/.test(input.departureDate)) return finish(400, {});
     const clean = p => ({ name:p.name, locode:p.locode });
-    const result = await OOCLProvider.searchSchedule({originPort:clean(input.originPort), destinationPort:clean(input.destinationPort),
+    const provider = req.url === '/cma/query' ? CMAProvider : OOCLProvider;
+    const result = await provider.searchSchedule({originPort:clean(input.originPort), destinationPort:clean(input.destinationPort),
       departureDate:input.departureDate, dateTo:input.dateTo});
     finish(200, result);
   } catch { finish(500, {}); } finally { active--; }
-}).listen(18341, '127.0.0.1', () => console.log('OOCL worker listening on localhost:18341'));
+}).listen(Number(process.env.OCEANSCOPE_WORKER_PORT || 18341), '127.0.0.1', () => console.log('Schedule worker listening on localhost'));
