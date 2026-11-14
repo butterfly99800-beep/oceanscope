@@ -152,7 +152,7 @@ async function resolvePort(value: string | null, carrierCity: string | null) {
   const code = cityCode && /^[A-Z]{2}[A-Z0-9]{3}$/.test(cityCode) ? cityCode
     : value && /^[A-Z]{2}[A-Z0-9]{3}$/.test(value) ? value : undefined;
   if (code) {
-    const aliases = [["CNSHA", "CNSGH"], ["CNNGB", "CNNBO"], ["CNTAO", "CNQIN"]];
+    const aliases = [["CNSHA", "CNSGH"], ["CNNGB", "CNNBO"], ["CNTAO", "CNQIN"], ["USLAX", "USLSA"]];
     const codes = aliases.find(group => group.includes(code)) || [code];
     // Fail closed when this exact location is absent, rather than using its name.
     return (await prisma.port.findFirst({ where: { locode: { in: codes } } })) ?? undefined;

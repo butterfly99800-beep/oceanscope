@@ -1,6 +1,6 @@
 import type { PortOption } from "@/features/schedules/types";
 
-const codeGroups = [["CNSHA", "CNSGH"], ["CNNGB", "CNNBO"], ["CNTAO", "CNQIN"]];
+const codeGroups = [["CNSHA", "CNSGH"], ["CNNGB", "CNNBO"], ["CNTAO", "CNQIN"], ["USLAX", "USLSA"]];
 function codeVariants(value: string) {
   return codeGroups.find(group => group.includes(value.toUpperCase())) || [value];
 }
