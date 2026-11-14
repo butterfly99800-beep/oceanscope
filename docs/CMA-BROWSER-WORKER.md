@@ -1,6 +1,6 @@
 # CMA existing-browser session worker
 
-This optional path uses a user-enabled Edge/Chrome extension to submit a **new** CMA global Routing Finder POST for each worker request. It does not upload cookies, use saved result files, log credentials, or require CMA login. The existing official tab must already have the requested origin/destination selected and a usable verification session. Other routes fail explicitly rather than returning that tab's previous route. Browser verification expiry can still require user intervention.
+This optional path uses a user-enabled Edge/Chrome extension to submit a **new** CMA global Routing Finder POST for each worker request. It does not upload cookies, use saved result files, log credentials, or require CMA login. The extension resolves requested port codes through the official location lookup and submits the requested dates in a new POST. It requires an open query form and a usable verification session. Automatic route switching is implemented but live multi-route acceptance remains blocked by official maintenance. Browser verification expiry can still require user intervention.
 
 ## Local setup
 
@@ -16,3 +16,7 @@ After deliberately updating the worker, set `CMA_USE_LOCAL_WORKER=true` on the a
 The application validates fresh-query metadata, exact port/date criteria, official source URL and parsed card count. Incomplete, stale, mismatched or failed responses are not substituted with China regional tables. Existing database records are retained; China-table records are excluded from global Routing Finder results.
 
 No database migration, seed, password change, or port import is required. Keep the previous release for rollback; disabling `CMA_USE_LOCAL_WORKER` restores the standard public browser query path. Public sites can still restrict that path.
+
+## Maintenance fallback
+
+Confirmed official maintenance is reported as `CMA_MAINTENANCE` (官网维护). Normal searches may retain verified global Routing Finder records fetched within the past 24 hours for the requested ports and departure range, preserving acquisition timestamps. No China regional records are reintroduced. Forced `refresh=true` searches never use this fallback. With no eligible records, no schedules are fabricated. No migration or change to the OOCL tunnel is needed.

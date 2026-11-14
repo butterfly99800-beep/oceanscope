@@ -42,6 +42,7 @@ type ScheduleListResponse = { data: SailingSchedule[]; pagination: { total: numb
 const carrierLabels: Record<string, string> = { COSCO: "COSCO", OOCL: "OOCL", CMA: "CMA CGM", MAERSK: "MAERSK", HAPAG: "Hapag-Lloyd", MSC: "MSC", ONE: "ONE", EMC: "EVERGREEN", YML: "YANG MING", HMM: "HMM", KMTC: "KMTC", ZIM: "ZIM" };
 
 function providerStatusText(provider: ProviderFetchStatus) {
+  if (provider.warnings.some(w => /CMA_MAINTENANCE/.test(w))) return provider.resultCount ? `${provider.resultCount} 条 · 官网维护` : "官网维护";
   if (provider.alternateLoading?.length) return [provider.resultCount ? provider.resultCount + " 条" : "", provider.alternateLoading.length + " 条异港装船"].filter(Boolean).join("，");
   if (provider.inlandRail?.length) return `${provider.resultCount + provider.inlandRail.length} 条`;
   if (provider.status === "success" || provider.status === "cached") return `${provider.resultCount} 条${provider.warnings.some(w=>/COUNT_RECONCILIATION_INCOMPLETE/.test(w)) ? "（部分）" : ""}`;

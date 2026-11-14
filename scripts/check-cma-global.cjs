@@ -3,3 +3,16 @@ const filename=path.resolve(__dirname,'../src/features/shipping/providers/cma/gl
 const card=(cutoff,transit='16')=>`<div class="cardelem"><div id="bottom-card-1"><div class="wrap-card"><div class="DepartureDatesCls" data-event-date="12/2/2026"><a href="/ebusiness/schedules/port/details?ActualPOLDescription=YANTIAN%20%3B%20CN%20%3B%20CNYTN">Yantian</a></div><div class="ArrivalDatesCls" data-event-date="12/18/2026"><a href="/ebusiness/schedules/port/details?ActualPOLDescription=LOS%20ANGELES%20%3B%20US%20%3B%20USLAX">Los Angeles</a></div><dl><dt>Main vessel</dt><dd>TEST VESSEL</dd><dt>Voyage Ref.</dt><dd>001E</dd><dt>Port cut-off</dt><dd>${cutoff}</dd></dl><span id="Transit_1" data-value="${transit}"></span><span id="Direct">Direct</span></div></div></div>`;
 for(const [text,hour] of [['27-Nov-2026, 11:00 PM','23'],['27-Nov-2026, 12:00 AM','00'],['27-Nov-2026, 12:00 PM','12'],['27-11月-2026, 23:00','23']]){const [r]=parseCmaGlobalHtml(card(text),'2026-11-14','2026-12-11');assert.equal(r.cutOffTime,`2026-11-27T${hour}:00:00.000Z`);assert.equal(r.transitDays,16);assert.equal(r.direct,true);assert.equal(r.etdTimeKnown,false);assert.equal(r.originLocode,'CNYTN');assert.equal(r.destinationLocode,'USLAX');}
 assert.equal(parseCmaGlobalHtml(card(''),'2026-11-14','2026-11-30').length,0);assert.equal(parseCmaGlobalHtml(card('',''),'2026-11-14','2026-12-11')[0].transitDays,null);assert.equal(parseCmaGlobalHtml('<html>verification required</html>','2026-11-14','2026-12-11').length,0);console.log('PASS CMA global official fields, AM/PM and Chinese time, date window, missing duration remains null, verification HTML rejected');
+
+const maintenanceFile=path.resolve(__dirname,'../src/features/shipping/providers/cma/maintenance.ts');
+const mm=new Module(maintenanceFile,module);mm.filename=maintenanceFile;mm.paths=m.paths;mm._compile(ts.transpileModule(fs.readFileSync(maintenanceFile,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,maintenanceFile);
+const {isCmaMaintenance,allowCmaMaintenanceFallback}=mm.exports;
+assert.equal(isCmaMaintenance('We are improving the eBusiness area'),true);
+assert.equal(isCmaMaintenance('unavailable due to scheduled maintenance'),true);
+for(const text of ['No results','Please verify you are human','Port not found'])assert.equal(isCmaMaintenance(text),false);
+const notices=[{code:'CMA',warnings:['CMA_PUBLIC_PAGE_FAILED: CMA_MAINTENANCE']}];
+assert.equal(allowCmaMaintenanceFallback(false,notices),true);
+assert.equal(allowCmaMaintenanceFallback(true,notices),false);
+assert.equal(allowCmaMaintenanceFallback(false,[{code:'CMA',warnings:['NO_SCHEDULE_FOUND']}]),false);
+assert.equal(allowCmaMaintenanceFallback(false,[{code:'OOCL',warnings:['CMA_MAINTENANCE']}]),false);
+console.log('PASS explicit maintenance detection and forced-live cache exclusion');

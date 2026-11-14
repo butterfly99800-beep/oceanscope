@@ -22,6 +22,7 @@ export async function queryCmaSession(input:CmaProviderSearchInput):Promise<CmaP
   const response=await fetch(`${base}/result/${id}`,{headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(5000)});
   if(response.status===200){
    const result=await response.json();
+   if(result.error === "CMA_MAINTENANCE")throw new Error("CMA_MAINTENANCE");
    if(result.error||result.kind!=="cma-query"||result.fresh!==true||result.sourceUrl!=="https://www.cma-cgm.com/ebusiness/schedules/routing-finder"||typeof result.html!=="string")throw new Error("Invalid official response");
    for(const key of Object.keys(criteria) as (keyof typeof criteria)[])if(result.criteria?.[key]!==criteria[key])throw new Error("Query criteria mismatch");
    if(!Number.isFinite(Date.parse(result.startedAt))||!Number.isFinite(Date.parse(result.completedAt))||Date.parse(result.startedAt)<started-1000||Date.parse(result.completedAt)<Date.parse(result.startedAt)||Date.parse(result.completedAt)>Date.now()+1000)throw new Error("Stale official response");

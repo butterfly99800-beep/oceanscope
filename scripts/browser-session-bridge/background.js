@@ -35,12 +35,15 @@ async function poll() {
       for(const tab of tabs){
         const checks=await chrome.scripting.executeScript({target:{tabId:tab.id},func:(job)=>{
           const f=document.querySelector('form[action$="/ebusiness/schedules/routing-finder"]');if(!f)return false;
-          const b=new FormData(f),code=n=>String(b.get(n)||'').split(';').pop().trim();
-          return code('ActualPOLDescription')===job.origin&&code('ActualPODDescription')===job.destination&&document.querySelectorAll('.cardelem').length>0;
+          return true;
         },args:[job]});
         if(checks[0]?.result){selected=tab;break;}
       }
-      if (!selected) throw new Error('No open official result tab matches the requested ports');
+      if (!selected) {
+        const notices=await Promise.all(tabs.map(tab=>chrome.scripting.executeScript({target:{tabId:tab.id},func:()=>/We are improving the eBusiness area|unavailable due to scheduled maintenance/i.test(document.body?.innerText||'')})));
+        if(notices.some(items=>items[0]?.result))throw new Error('CMA_MAINTENANCE');
+        throw new Error('No open official CMA query form is available');
+      }
       const values = await chrome.scripting.executeScript({target: {tabId: selected.id}, func: runPublicJob, args: [job]});
       result = values[0]?.result;
       if (!result) throw new Error('No result from official tab');
@@ -50,13 +53,33 @@ async function poll() {
   finally { busy = false; }
 }
 async function runPublicJob(job) {
+ try {
   if (location.origin !== 'https://www.cma-cgm.com' || location.pathname !== '/ebusiness/schedules/routing-finder') throw new Error('Wrong official page');
   const form = document.querySelector('form[action$="/ebusiness/schedules/routing-finder"]');
   if (!form) throw new Error('Official query form unavailable');
   const body = new FormData(form);
   const code = name => String(body.get(name) || '').split(';').pop().trim();
-  // Do not invent location identifiers or silently query the previous route.
-  if (code('ActualPOLDescription') !== job.origin || code('ActualPODDescription') !== job.destination) throw new Error('Select the requested ports in the official tab first');
+  // Same public lookup and fields used by the official SortedAutocomplete widget.
+  async function place(code) {
+    if (!/^[A-Z]{2}[A-Z0-9]{3}$/.test(code)) throw new Error('Invalid port code');
+    const response=await fetch('/api/PortsWithInlands/GetAllPlaces?id='+encodeURIComponent(code),{credentials:'same-origin',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});
+    if(!response.ok)throw new Error('Official place lookup HTTP '+response.status);
+    const data=await response.json();
+    if(!Array.isArray(data))throw new Error('Official place lookup response invalid');
+    const matches=data.filter(p=>String(p.placeCode||'').toUpperCase()===code && String(p.actualName||'').split(';').pop().trim().toUpperCase()===code && p.name && p.capsule);
+    const ports=matches.filter(p=>String(p.capsule).toLowerCase()==='port');
+    const choices=ports.length?ports:matches;
+    const unique=[...new Map(choices.map(p=>[p.actualName+'|'+p.capsule,p])).values()];
+    if(unique.length!==1)throw new Error('Official place missing or ambiguous: '+code);
+    return unique[0];
+  }
+  const [origin,destination]=await Promise.all([place(job.origin),place(job.destination)]);
+  for(const [suffix,item,visible] of [['POL',origin,'polDescription'],['POD',destination,'podDescription']]) {
+    body.set('Actual'+suffix+'Description',item.actualName);
+    body.set('Actual'+suffix+'Type',item.capsule);
+    body.set(visible,item.name);
+  }
+  if(code('ActualPOLDescription')!==job.origin||code('ActualPODDescription')!==job.destination)throw new Error('Official location mismatch');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(job.date) || !Number.isInteger(job.weeks) || job.weeks < 1 || job.weeks > 10) throw new Error('Invalid date range');
   const [year, month, day] = job.date.split('-');
   const oldDate = String(body.get('SearchDate') || '');
@@ -67,6 +90,7 @@ async function runPublicJob(job) {
   const response = await fetch(form.action, {method: 'POST', body, credentials: 'same-origin', cache: 'no-store', redirect: 'error'});
   if (!response.ok) throw new Error('Official query HTTP ' + response.status);
   const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+  if (/We are improving the eBusiness area|unavailable due to scheduled maintenance/i.test(doc.body?.textContent || '')) throw new Error('CMA_MAINTENANCE');
   const cards = [...doc.querySelectorAll('.cardelem')];
   if (!cards.length) throw new Error('No verified official result cards (empty or verification page)');
   const section = doc.createElement('section');
@@ -74,4 +98,5 @@ async function runPublicJob(job) {
   for (const card of cards) section.append(card.cloneNode(true));
   section.querySelectorAll('script,input,textarea,iframe').forEach(el => el.remove());
   return {kind: job.kind, fresh: true, sourceUrl: response.url, startedAt, completedAt: new Date().toISOString(), criteria: {origin: job.origin,destination: job.destination,date: job.date,weeks: job.weeks}, count: cards.length, html: section.outerHTML};
+ } catch(error) { return {error:String(error.message || error)}; }
 }

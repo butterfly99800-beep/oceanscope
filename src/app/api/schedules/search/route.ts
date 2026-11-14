@@ -1,3 +1,4 @@
+import { allowCmaMaintenanceFallback } from "@/features/shipping/providers/cma/maintenance";
 import { ooclItineraryEvidence } from "@/features/shipping/providers/oocl/itinerary";
 import { scheduleDateWindows } from "@/features/shipping/providers/query-windows";
 import type { QueryAudit } from "@/features/shipping/providers/query-audit";
@@ -245,8 +246,8 @@ function sourceMatchesPorts(row: { source: ScheduleDataSource; sourceReference: 
   if (row.source === "CMA_LIVE_QUERY") {
     try {
       const raw = JSON.parse(text);
-      if (raw.sourceUrl === "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery") return false;
-    } catch { /* Legacy global page text remains supported. */ }
+      if (!/^https:\/\/www\.cma-cgm\.com\/ebusiness\/schedules(?:\/routing-finder)?$/.test(raw.sourceUrl || "")) return false;
+    } catch { return false; }
   }
   if (row.source === "COSCO_LIVE_QUERY") {
     try {
@@ -445,9 +446,19 @@ export async function GET(request: Request) {
         staleWhere.updatedAt = { gte: new Date(state.startedAt) };
         staleWhere.source = { in: state.providers.filter((provider) => provider.status === "success").map((provider) => sourceForProvider(provider.code)) };
       }
+      // During confirmed CMA maintenance retain only previously verified global rows,
+      // bounded to 24 hours and the requested route/date range. Forced tests never use them.
+      const maintenanceFallback = allowCmaMaintenanceFallback(Boolean(state.forceRefresh), state.providers);
+      if (maintenanceFallback) {
+        delete staleWhere.updatedAt;
+        staleWhere.AND = [...(Array.isArray(staleWhere.AND) ? staleWhere.AND : staleWhere.AND ? [staleWhere.AND] : []), { OR: [
+          { updatedAt: { gte: cacheCutoff() } },
+          { source: ScheduleDataSource.CMA_LIVE_QUERY, updatedAt: { gte: new Date(Date.now()-24*60*60*1000) } }
+        ] }];
+      }
       const payload = await listPayload(staleWhere, searchParams);
       return NextResponse.json({ ...payload, done: state.done, providers: state.providers.map((provider) => ({ ...provider,
-        resultCount: provider.status === "success" || provider.status === "cached" ? payload.providerCounts[provider.code] ?? 0 : provider.resultCount,
+        resultCount: (provider.status === "success" || provider.status === "cached" || (maintenanceFallback && provider.code === "CMA")) ? payload.providerCounts[provider.code] ?? 0 : provider.resultCount,
       })) });
     }
 

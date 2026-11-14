@@ -1,3 +1,4 @@
+import { isCmaMaintenance } from "./maintenance";
 import { queryCmaSession } from "./session-client";
 import { parseCmaGlobalHtml } from "./global-parser";
 import { canonicalPortCode, officialPortName } from "@/features/ports/server/source-port-match";
@@ -30,6 +31,7 @@ async function waitForQueryForm(page: import("playwright").Page, interactive: bo
   const deadline = Date.now() + (interactive ? 180000 : 25000);
   while (Date.now() < deadline) {
     if (await form.isVisible()) return form;
+    if (isCmaMaintenance(await page.locator("body").innerText().catch(()=>""))) throw new Error("CMA_MAINTENANCE");
     const challenge = page.locator('iframe[src*="captcha-delivery.com/captcha"]').first();
     if (await challenge.isVisible()) {
       const frame = await (await challenge.elementHandle())?.contentFrame();
@@ -65,7 +67,7 @@ export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderRe
     }
     if (process.env.CMA_USE_BROWSER_SESSION === "true") {
       try { return await queryCmaSession(input); }
-      catch { return {source:"CMA_LIVE",schedules:[],warnings:["CMA_BROWSER_SESSION_UNAVAILABLE"],durationMs:Date.now()-started,fromCache:false}; }
+      catch (error) { return {source:"CMA_LIVE",schedules:[],warnings:[error instanceof Error && error.message === "CMA_MAINTENANCE" ? "CMA_MAINTENANCE" : "CMA_BROWSER_SESSION_UNAVAILABLE"],durationMs:Date.now()-started,fromCache:false}; }
     }
     const [origin, destination] = await Promise.all([portDescription(input.originPort), portDescription(input.destinationPort)]);
     // A normal schedule search must never open a verification window.
@@ -97,7 +99,7 @@ export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderRe
       await page.locator(".cardelem").first().waitFor({ state: "attached", timeout: 45000 }).catch(() => undefined);
       const schedules = parseCmaGlobalHtml(await page.content(), input.departureDate.slice(0,10), (input.dateTo || input.departureDate).slice(0,10));
       const bodyText = await page.locator("body").innerText().catch(() => "");
-      const warnings = schedules.length ? [] : [/captcha|verify you are human|access denied|datadome/i.test(bodyText)
+      const warnings = schedules.length ? [] : [isCmaMaintenance(bodyText) ? "CMA_MAINTENANCE" : /captcha|verify you are human|access denied|datadome/i.test(bodyText)
         ? "CMA_CAPTCHA_REQUIRED: public page requested human verification."
         : /no (?:schedules|results|routes|routing)|no result found/i.test(bodyText) ? "NO_SCHEDULE_FOUND"
           : "CMA_RESPONSE_INVALID: official result cards were not present"];
