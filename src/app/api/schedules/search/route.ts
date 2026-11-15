@@ -133,7 +133,7 @@ async function queryDestinations(targets: Port[], query: (port: Port) => Promise
 
 async function withProviderTimeout(code: string, task: Promise<LiveProviderResult>): Promise<LiveProviderResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = code === "OOCL" ? Math.max(providerTimeoutMs(), 205000) : providerTimeoutMs();
+  const timeout = (code === "OOCL" || code === "CMA") ? Math.max(providerTimeoutMs(), 205000) : providerTimeoutMs();
   try {
     return await Promise.race([
       task,
@@ -241,12 +241,12 @@ function sourceMatchesPorts(row: { source: ScheduleDataSource; sourceReference: 
   if (!row.rawSourceData) return false;
   const text = typeof row.rawSourceData === "string" ? row.rawSourceData : JSON.stringify(row.rawSourceData);
   const matches = matchesSourcePort;
-  // China regional sailing tables are not global Routing Finder itineraries.
-  // Keep historical rows in the database, but do not serve them as routing results.
+  // Accept explicitly identified global or regional official sources.
+  // The mapper labels regional tables separately from global routing results.
   if (row.source === "CMA_LIVE_QUERY") {
     try {
       const raw = JSON.parse(text);
-      if (!/^https:\/\/www\.cma-cgm\.com\/ebusiness\/schedules(?:\/routing-finder)?$/.test(raw.sourceUrl || "")) return false;
+      if (raw.sourceUrl !== "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery" && !/^https:\/\/www\.cma-cgm\.com\/ebusiness\/schedules(?:\/routing-finder)?$/.test(raw.sourceUrl || "")) return false;
     } catch { return false; }
   }
   if (row.source === "COSCO_LIVE_QUERY") {

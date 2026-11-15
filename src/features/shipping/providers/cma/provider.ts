@@ -1,3 +1,4 @@
+import { searchChinaPublic } from "./china-public";
 import { isCmaMaintenance } from "./maintenance";
 import { queryCmaSession } from "./session-client";
 import { parseCmaGlobalHtml } from "./global-parser";
@@ -47,7 +48,7 @@ async function waitForQueryForm(page: import("playwright").Page, interactive: bo
   throw new Error("CMA_PAGE_LOAD_TIMEOUT: official query form did not load");
 }
 
-export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderResult> = {
+const CMAGlobalProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderResult> = {
   code: "CMA",
   async searchSchedule(input) {
     const started = Date.now();
@@ -109,4 +110,16 @@ export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderRe
       return { source: "CMA_LIVE", schedules: [], warnings: [`CMA_PUBLIC_PAGE_FAILED: ${message}`], durationMs: Date.now() - started, fromCache: false };
     } finally { await browser.close(); }
   },
+};
+
+// Regional tables remain a separately labelled fallback, never a global routing claim.
+export const CMAProvider: ShippingProvider<CmaProviderSearchInput, CmaProviderResult> = {
+ code:"CMA",
+ async searchSchedule(input) {
+  const primary=await CMAGlobalProvider.searchSchedule(input);
+  if(primary.schedules.length || primary.warnings.includes("NO_SCHEDULE_FOUND"))return primary;
+  const regional=await searchChinaPublic({...input,forceRefresh:true});
+  if(!regional.schedules.length)return {...primary,warnings:[...primary.warnings,...regional.warnings]};
+  return {...regional,warnings:[...primary.warnings,"CMA_CHINA_REGIONAL_FALLBACK",...regional.warnings],durationMs:primary.durationMs+regional.durationMs};
+ }
 };

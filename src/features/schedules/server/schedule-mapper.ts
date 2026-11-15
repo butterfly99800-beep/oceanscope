@@ -58,7 +58,7 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
   if (schedule.source === "CMA_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
     try {
       const raw = JSON.parse(schedule.rawSourceData);
-      if (raw.sourceUrl === "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery") sourceDescription = "CMA CGM 中国站船期表";
+      if (raw.sourceUrl === "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery") sourceDescription = "CMA CGM 官方船期";
       else if (/^https:\/\/www\.cma-cgm\.com\/ebusiness\/schedules(?:\/routing-finder)?$/.test(raw.sourceUrl || "")) sourceDescription = "CMA CGM 全球站 Routing Finder";
     } catch { /* Old page text has no source URL. */ }
   }

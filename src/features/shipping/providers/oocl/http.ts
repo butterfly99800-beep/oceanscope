@@ -103,6 +103,7 @@ export async function queryOoclHttp(criteria: Criteria, existing?: { http: APIRe
           }
         }
         if (!texts.length && warnings.length) throw new Error(warnings[0]);
+        if (texts.length !== links.length) warnings.push(`COUNT_RECONCILIATION_INCOMPLETE: official offered ${links.length} details, received ${texts.length}`);
         return { texts, warnings };
       }
       if (/no\s+results?\s+(?:(?:were|was|are)\s+)?found/i.test($("body").text())) return { texts: [], warnings: ["NO_SCHEDULE_FOUND"] };
