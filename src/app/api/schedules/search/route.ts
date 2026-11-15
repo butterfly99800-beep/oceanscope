@@ -222,7 +222,7 @@ function latestScheduleSnapshots<T extends { id: string; source: ScheduleDataSou
   const latest = new Map<string, T>();
   const identity = (row: T) => row.vesselName && row.voyageNumber
     ? JSON.stringify([row.source, row.originPortId, row.destinationPortId, row.vesselName, row.voyageNumber, row.serviceName, row.frequency,
-      ((typeof row.rawSourceData === "string" && (row.rawSourceData.startsWith('{"officialLegs":') || (row.source === "OOCL_LIVE_QUERY" && row.rawSourceData.includes("\nOfficial Desktop:")))) || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(row.source)) ? row.sourceReference : null]) : row.id;
+      ((typeof row.rawSourceData === "string" && (row.rawSourceData.startsWith('{"officialLegs":') || (row.source === "OOCL_LIVE_QUERY" && row.rawSourceData.includes("\nOfficial Desktop:")))) || ["HAPAG_LIVE_QUERY", "MAERSK_LIVE_QUERY", "EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(row.source)) ? row.sourceReference : null]) : row.id;
   for (const row of rows) {
     const key = identity(row);
     const previous = latest.get(key);

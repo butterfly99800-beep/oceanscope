@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { classifySeaRouting } from "../routing-evidence";
 import { canonicalPortCode, officialPortName } from "@/features/ports/server/source-port-match";
 import { portClock } from "../port-clock";
@@ -89,8 +90,10 @@ async function resolveGeoId(port: MaerskProviderPort): Promise<string | null> {
 
 function parseIsoDuration(duration: string | null | undefined): number | null {
   if (!duration) return null;
-  const days = /(\d+)D/.exec(duration);
-  return days ? Number(days[1]) : null;
+  const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(duration);
+  if (!match || !match.slice(1).some(value => value !== undefined)) return null;
+  const seconds = Number(match[1] || 0)*86400 + Number(match[2] || 0)*3600 + Number(match[3] || 0)*60 + Number(match[4] || 0);
+  return Number.isFinite(seconds) ? Math.floor(seconds/86400) : null;
 }
 
 function explicitBoolean(value: unknown): boolean | null {
@@ -158,7 +161,7 @@ export function parseSchedules(json: unknown, originText: string, destinationTex
     const normalize = (v: string | null | undefined) => v?.trim().toUpperCase().replace(/\s+/g," ");
     const transitPorts = verified.direct === false ? chain.slice(1).flatMap((leg,k)=>normalize(leg.vessel)!==normalize(chain[k].vessel) && leg.from ? [leg.from] : []) : [];
     out.push({
-      id: `maersk-${i}-${etd.iso}`,
+      id: `maersk-${createHash("sha256").update(JSON.stringify([originLocode,destinationLocode,legs.map(l=>{const c=object(l.carriage);return [c?.carriageType,c?.vessel,c?.vesselPortCallStart,c?.vesselPortCallEnd,c?.railScheduleLocationStart,c?.railScheduleLocationEnd,c?.truckScheduleLocationStart,c?.truckScheduleLocationEnd];}),etd.iso,eta.iso])).digest("hex")}`,
       carrierName: "MAERSK",
       serviceName: stringValue(depSvc?.serviceName) || stringValue(arrSvc?.serviceName),
       routeName: stringValue(depSvc?.serviceCode),

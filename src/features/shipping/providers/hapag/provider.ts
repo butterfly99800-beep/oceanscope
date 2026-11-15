@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { classifySeaRouting } from "../routing-evidence";
 import { portClock } from "../port-clock";
 import type { Port } from "@prisma/client";
@@ -124,7 +125,7 @@ export function mapRoute(item: unknown, index: number): CoscoSchedulePreview | n
   if (!originText || !destinationText) return null;
 
   return {
-    id: `hapag-${stringAt(route, ["id", "routeId", "routingId"]) || `${index}-${etd}`}`,
+    id: `hapag-${createHash("sha256").update(JSON.stringify([route.placeOfReceipt,route.placeOfDelivery,legs.map(l=>[l.modeOfTransport,locationCode(l.departureLocation),locationCode(l.arrivalLocation),l.departureDateTime,l.arrivalDateTime,l.scheduleVoyageNumber,l.vesselDetails]),etd,eta])).digest("hex")}`,
     carrierName: "HAPAG-LLOYD",
     serviceName: stringAt(route, ["serviceName", "service", "tradeName"]) || stringAt(first, ["serviceName", "service"]),
     routeName: stringAt(route, ["routeName", "routeCode"]) || stringAt(first, ["serviceCode"]),

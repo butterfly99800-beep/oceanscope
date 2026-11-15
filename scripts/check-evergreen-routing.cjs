@@ -32,3 +32,5 @@ assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LONG BEACH, CA').days
 assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LONG BEACH, CA').direct,true);
 assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LOS ANGELES, CA').days,null);
 assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LOS ANGELES, CA').direct,null);
+
+assert.deepEqual(evergreenRouting([first,wait,[...next.slice(0,1),"PUSAN \n (B)",...next.slice(2)]],"QINGDAO","SAVANNAH"),{direct:false,stopCount:1});

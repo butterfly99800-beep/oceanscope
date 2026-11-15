@@ -31,7 +31,8 @@ export function evergreenDirectLeg(legs: string[][] | undefined, origin: string,
 }
 export function evergreenRouting(legs: string[][] | undefined, origin: string, destination: string): {direct:boolean|null;stopCount:number|null} {
  const unknown={direct:null,stopCount:null};
- if(!legs?.length || legs.some(l=>l.length!==8))return unknown;
+ if(!legs?.length || legs.some(l=>!Array.isArray(l)||l.length!==8))return unknown;
+ legs=legs?.map(l=>l.map((v,i)=>i===1||i===2?v.replace(/\s*\([A-Z]\)\s*$/, "").replace(/\s+/g," ").trim():v));
  const sea=legs.filter(l=>l[5]!=="WAITING");
  if(!sea.length || sea[0][1]!==origin || sea.at(-1)![2]!==destination)return unknown;
  // WAITING rows must stay at the connection port; never silently discard inland legs.

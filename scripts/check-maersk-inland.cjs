@@ -5,6 +5,7 @@ const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, '../src/features/shipping/providers/maersk/provider.ts'), 'utf8');
 const exportsObject = {};
 new Function('exports', 'require', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(exportsObject, name => {
+  if (name === 'node:crypto') return require(name);
   if (name === '../routing-evidence') {
     const sourcePort={}; new Function('exports',ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/ports/server/source-port-match.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(sourcePort);
     const helper={}; new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/shipping/providers/routing-evidence.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(helper,()=>sourcePort); return helper;
@@ -28,3 +29,5 @@ assert.equal(parse([ocean])[0].eta.slice(0, 10), '2026-11-29');
 assert.equal(parse([ocean, { carriageType: 'UNKNOWN' }]).length, 0, 'Unknown final leg must not invent an ETA');
 assert.equal(parse([{ ...rail, railScheduleLocationStart: { estimatedTimeOfDeparture: '2026-10-28T00:00:00' } }, ocean])[0].vesselName, 'SANTA BARBARA');
 console.log('PASS: ocean, final rail, initial rail, unknown final leg, retained raw source');
+
+assert.equal(exportsObject.parseSchedules({routings:[{routingLegs:[{carriage:ocean}],estimatedTransitTime:"PT16H"}]},"Shanghai","Tokyo","CNSHA","JPTYO")[0].transitDays,0);

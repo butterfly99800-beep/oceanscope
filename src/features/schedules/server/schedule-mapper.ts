@@ -69,6 +69,9 @@ export function mapSchedule(schedule: ScheduleWithRelations): SailingSchedule {
   if(schedule.source === "SITC_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
     try {const raw=JSON.parse(schedule.rawSourceData);if(raw.row?.weekEtd)transitDaysBasis="官网表定航程";}catch{/* Missing source metadata stays blank. */}
   }
+  if(schedule.source === "MAERSK_LIVE_QUERY" && typeof schedule.rawSourceData === "string") {
+    try {const raw=JSON.parse(schedule.rawSourceData);if(/^PT\d+H$/.test(raw.estimatedTransitTime || ""))transitDaysBasis=`官网 ${raw.estimatedTransitTime.slice(2,-1)} 小时，折合整天`;}catch{/* No inferred duration. */}
+  }
   return {
     transitDaysBasis,
     sourceDescription,

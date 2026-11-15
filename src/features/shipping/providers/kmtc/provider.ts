@@ -20,12 +20,14 @@ function parseKmtc(payload: unknown, origin: Point, destination: Point, originCo
     if (row.polCtrCd !== origin.ctrCd || row.pol !== origin.plcCd || row.podCtrCd !== destination.ctrCd || row.pod !== destination.plcCd) continue;
     const etd = kmtcDate(row.etd, row.etdTm), eta = kmtcDate(row.eta, row.etaTm);
     if (!etd || !eta || etd >= eta || etd.slice(0, 10) < from || etd.slice(0, 10) > to) continue;
-    const stops = text(row.tsDegree), days = text(row.ttransDds);
+    const days = text(row.ttransDds);
+    const legs = [1,2,3,4].flatMap(i => text(row[`pol${i}`]) && text(row[`pod${i}`]) ? [{from:text(row[`pol${i}`]),to:text(row[`pod${i}`])}] : []);
+    const stops = row.ts === "N" ? 0 : row.ts === "Y" && legs.length > 1 && legs[0].from === row.pol && legs.at(-1)?.to === row.pod && legs.every((l,i)=>i===0||legs[i-1].to===l.from) ? legs.length-1 : null;
     schedules.push({ id: scheduleId("KMTC", [originCode, destinationCode, row.vslCd, row.voyNo, etd, eta, row.info]), carrierName: "KMTC", originText: text(row.polNm) || origin.plcNm, destinationText: text(row.podNm) || destination.plcNm, originLocode: originCode, destinationLocode: destinationCode,
       vesselName: text(row.vslNm), voyageNumber: text(row.voyNo), serviceName: text(row.rteCd), routeName: text(row.rteCdNm), etd, eta,
       etdTimeKnown: typeof row.etdTm === "string" && /^\d{4}$/.test(row.etdTm), etaTimeKnown: typeof row.etaTm === "string" && /^\d{4}$/.test(row.etaTm),
       transitDays: days && /^\d+$/.test(days) ? Number(days) : null, direct: row.ts === "N" ? true : row.ts === "Y" ? false : null,
-      stopCount: stops && /^\d+$/.test(stops) ? Number(stops) : null, transitPorts: [],
+      stopCount: stops, transitPorts: [],
       originFacilityName: text(row.otrmlNm), destinationFacilityName: text(row.itrmlNm), cutOffTime: kmtcDate(row.bkgCgoCls), siCutOffTime: kmtcDate(row.bkgDocCls), availableTime: kmtcDate(row.eirOpenCls),
       rawText: JSON.stringify({ sourceUrl: API + "/schedule/schedule/leg/search-schedule", row, timeBasis: "official port-local time; offset not supplied" }) });
   }
