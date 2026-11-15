@@ -70,7 +70,7 @@ export function ScheduleCard({ schedule, selected, favorite, comparing, onSelect
       <div className="mt-3"><ScheduleTimeline schedule={schedule} /></div>
       <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-4">
         <Info icon={<Ship className="h-4 w-4" />} label="船名 / Service / 航次" value={[schedule.vesselName, schedule.serviceName, schedule.voyageNumber].filter(Boolean).join(" / ")} />
-        <Info icon={<CalendarClock className="h-4 w-4" />} label="航程" value={schedule.transitDays !== null ? `${schedule.transitDays} 天` : null} />
+        <Info icon={<CalendarClock className="h-4 w-4" />} label="航程" value={schedule.transitDays !== null ? `${schedule.transitDays} 天${schedule.transitDays === 0 ? "（官网整天数）" : ""}` : null} />
         <Info icon={<CalendarClock className="h-4 w-4" />} label="截载时间" value={formatDate(schedule.cutOffTime)} />
         <Info icon={<Ship className="h-4 w-4" />} label="货物类型" value={schedule.cargoNature} />
       </div>

@@ -17,11 +17,13 @@ export async function createScheduleWorkbook(schedules:SailingSchedule[]) {
  const book = new Workbook();
  const sheet = book.addWorksheet("船期明细");
  sheet.addRow(["船司","起运地","起运代码","目的地","目的代码","船名","航次","服务","离港日期/时间","到达日期/时间","航程天数","直航或中转","起运码头","目的码头","截关时间（港口当地）","数据获取时间（北京时间）","数据来源","中转港","中转到港时间","中转离港时间","后续船名 / 航次","航程依据","可提货时间（港口当地）"]);
+ sheet.getCell(1,11).note="保留官网公布的整数天数；0 不表示瞬间抵达，请结合离港、到达日期时间查看。直航表示不换船，可能经停其他港口。";
  const transfers=book.addWorksheet("中转明细");
  transfers.addRow(["船期序号","船司","首程船名","首程航次","中转顺序","中转港","港口代码","到港时间（当地）","离港时间（当地）","后续船名","后续航次","码头"]);
  for (const [index,row] of schedules.entries()) {
   const ports=row.transitPorts??[];
   const excelRow=sheet.addRow([row.carrier,row.originPort,row.originPortCode,row.destinationPort,row.destinationPortCode,row.vesselName,row.voyageNumber,row.serviceName,displayDate(row.etd),displayDate(row.eta),row.transitDays,row.direct===true?"直航":row.direct===false?"中转":null,row.terminal,row.destinationTerminal,displayDate(row.cutOffTime),acquisitionDate(row.lastUpdated),row.sourceDescription || sourceLabel(row.source,row.carrier),ports.map(p=>[p.portName,p.portCode].filter(Boolean).join(" ")).join(" → "),ports.map(p=>p.arrivalTime?.slice(0,16).replace("T"," ")||"").join("\n"),ports.map(p=>p.departureTime?.slice(0,16).replace("T"," ")||"").join("\n"),ports.map(p=>[p.nextVesselName,p.nextVoyageNumber].filter(Boolean).join(" / ")).join("\n"),row.transitDays===null?null:row.transitDaysBasis||"官网公布",displayDate(row.availableTime)]);
+  if(row.transitDays===0)excelRow.getCell(11).numFmt='[=0]"0（官网整天数）";0';
   for(const col of [9,10,15,16,23])excelRow.getCell(col).numFmt=col===16?"yyyy-mm-dd hh:mm:ss":((col===9&&row.etdTimeKnown===false)||(col===10&&row.etaTimeKnown===false)||(col===15&&row.source==="OOCL_LIVE_QUERY"))?"yyyy-mm-dd":"yyyy-mm-dd hh:mm";
   for(const [i,p] of ports.entries()){const r=transfers.addRow([index+1,row.carrier,row.vesselName,row.voyageNumber,i+1,p.portName,p.portCode,displayDate(p.arrivalTime),displayDate(p.departureTime),p.nextVesselName,p.nextVoyageNumber,p.terminal]);for(const col of [8,9])r.getCell(col).numFmt=((col===8?p.arrivalTime:p.departureTime)||"").length<=10?"yyyy-mm-dd":"yyyy-mm-dd hh:mm";}
  }

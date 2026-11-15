@@ -358,7 +358,7 @@ export function SchedulesShell() {
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-ink">{criteria.originCoscoCity?.fullName || portLabel(ports, criteria.originPortId)} → {criteria.destinationCoscoCity?.fullName || portLabel(ports, criteria.destinationPortId)}</h2>
-                <p className="mt-1 text-sm text-slate-500">日期范围：{criteria.departureDate} 起 {criteria.afterDays} 天 · 共 {filtered.length} 条船期{directCount ? ` · ${directCount} 条已确认直达` : ""}{shortest !== null ? ` · 已公布最短航程 ${shortest} 天` : ""}</p>
+                <p className="mt-1 text-sm text-slate-500">日期范围：{criteria.departureDate} 起 {criteria.afterDays} 天 · 共 {filtered.length} 条船期{directCount ? ` · ${directCount} 条已确认直达` : ""}{shortest !== null ? ` · 已公布最短航程 ${shortest} 天${shortest === 0 ? "（官网整天数）" : ""}` : ""}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={backToQuery} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:border-ocean-500 hover:text-ocean-700"><ArrowLeft className="h-4 w-4" />返回查询</button>

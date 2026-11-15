@@ -43,7 +43,7 @@ export function ScheduleOverview({ schedules }: { schedules: SailingSchedule[] }
             <th scope="row" className="px-4 py-4 align-top font-semibold text-blue-600">{departureWeekdays[day] || "待确认"}</th>
             <td className="px-4 py-3"><div className="flex flex-wrap gap-x-5 gap-y-3">{services.map(service => <div key={JSON.stringify([service.carrier,service.service])}>
               <span className="font-semibold text-slate-800">{service.carrier}</span>{service.service && <span className="ml-1 text-slate-500">({service.service})</span>}
-              {service.minDays !== null && <span className="ml-2 text-blue-600">{service.minDays === service.maxDays ? service.minDays : service.minDays + "–" + service.maxDays} 天</span>}
+              {service.minDays !== null && <span className="ml-2 text-blue-600">{service.minDays === service.maxDays ? service.minDays : service.minDays + "–" + service.maxDays} 天{service.minDays === 0 ? "（官网整天数）" : ""}</span>}
             </div>)}</div></td>
             <td className="px-4 py-3"><div className="flex flex-wrap gap-2">{Array.from(new Set(rows.map(row => date(row.etd)))).sort().map(d => <span key={d} title={d} className="rounded border border-orange-200 bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700">{d.slice(5)}</span>)}</div></td>
           </tr>;
