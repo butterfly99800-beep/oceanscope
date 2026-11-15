@@ -65,7 +65,7 @@ function toRecord(schedule: ScheduleRecord) {
     transitPortIds: schedule.transitPorts.map((item) => item.portId).join(","),
     transitPorts: schedule.transitPorts.map((item) => `${item.port.name} (${item.port.locode})`).join(" / "),
     etd: schedule.etd.toISOString().slice(0, 16),
-    eta: schedule.eta.toISOString().slice(0, 16),
+    eta: (schedule.eta?.toISOString().slice(0, 16) ?? ""),
     transitDays: schedule.transitDays,
     direct: schedule.direct ? "直达" : "中转",
     stopCount: schedule.stopCount,

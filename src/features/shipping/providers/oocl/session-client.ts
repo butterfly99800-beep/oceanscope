@@ -1,7 +1,7 @@
 import { mergeOoclCargoVariants } from "./itinerary";
 import { readFile } from "node:fs/promises";
 import {parseOoclDesktopRows} from "./desktop-parser";
-import { canonicalPortCode } from "@/features/ports/server/source-port-match";
+import { canonicalPortCode, officialPortName } from "@/features/ports/server/source-port-match";
 import type { OoclProviderSearchInput, OoclProviderResult } from "./provider";
 
 /** Queue a new official POST in an explicitly enabled browser; never reuse captured HTML. */
@@ -15,7 +15,7 @@ export async function queryOoclSession(input:OoclProviderSearchInput):Promise<Oo
  const days=Math.round((Date.parse(to)-Date.parse(from))/86400000)+1;
  if(!Number.isFinite(days)||days<1||days>70)throw new Error("Invalid date range");
  const criteria={origin:canonicalPortCode(input.originPort.locode),destination:canonicalPortCode(input.destinationPort.locode),date:from,weeks:Math.ceil(days/7)};
- const request=await fetch(`${base}/jobs`,{method:"POST",headers,cache:"no-store",redirect:"error",body:JSON.stringify({kind:"oocl-query",...criteria}),signal:AbortSignal.timeout(5000)});
+ const request=await fetch(`${base}/jobs`,{method:"POST",headers,cache:"no-store",redirect:"error",body:JSON.stringify({kind:"oocl-query",...criteria,originName:officialPortName(input.originPort),destinationName:officialPortName(input.destinationPort)}),signal:AbortSignal.timeout(5000)});
  if(!request.ok)throw new Error("Session queue unavailable");
  const {id}=await request.json();
  if(!/^[a-f0-9]{32}$/.test(id))throw new Error("Invalid job ID");
@@ -23,12 +23,12 @@ export async function queryOoclSession(input:OoclProviderSearchInput):Promise<Oo
   const response=await fetch(`${base}/result/${id}`,{headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(5000)});
   if(response.status===200){
    const result=await response.json();
-   if(result.error === "CMA_MAINTENANCE")throw new Error("CMA_MAINTENANCE");
    if(result.error||result.kind!=="oocl-query"||result.fresh!==true||result.sourceUrl!=="https://moc.oocl.com/nj_prs_wss/"||!Array.isArray(result.rows))throw new Error("Invalid official response");
    for(const key of Object.keys(criteria) as (keyof typeof criteria)[])if(result.criteria?.[key]!==criteria[key])throw new Error("Query criteria mismatch");
    if(!Number.isFinite(Date.parse(result.startedAt))||!Number.isFinite(Date.parse(result.completedAt))||Date.parse(result.startedAt)<started-1000||Date.parse(result.completedAt)<Date.parse(result.startedAt)||Date.parse(result.completedAt)>Date.now()+1000)throw new Error("Stale official response");
    if(result.rows.length!==result.count)throw new Error("Official row count mismatch");
-   const schedules=mergeOoclCargoVariants(parseOoclDesktopRows(result.rows,from,to,criteria.destination,result.routes));
+   if(!result.locations?.origin?.codes?.includes(criteria.origin)||!result.locations?.destination?.codes?.includes(criteria.destination))throw new Error("Official location evidence missing");
+   const schedules=mergeOoclCargoVariants(parseOoclDesktopRows(result.rows,from,to,criteria.destination,result.routes,{originCode:criteria.origin,originName:result.locations?.origin?.name,destinationName:result.locations?.destination?.name}));
    return {source:"OOCL_LIVE",schedules,warnings:schedules.length?[]:["NO_SCHEDULE_FOUND"],durationMs:Date.now()-started,fromCache:false};
   }
   if(response.status!==202)throw new Error("Session job unavailable");

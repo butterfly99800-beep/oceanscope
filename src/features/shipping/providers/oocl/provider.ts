@@ -262,8 +262,7 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
       }
     }
     // Use the validated desktop connector only for its supported route scope.
-    if (process.env.OOCL_USE_BROWSER_SESSION === "true" && canonicalPortCode(input.originPort.locode) === "CNSHA"
-        && ["USLAX", "USLGB"].includes(canonicalPortCode(input.destinationPort.locode))) {
+    if (process.env.OOCL_USE_BROWSER_SESSION === "true") {
       try {
         const { queryOoclSession } = await import("./session-client");
         const desktop = await queryOoclSession(input);

@@ -188,7 +188,7 @@ model SailingSchedule {
   originPortId          String
   destinationPortId     String
   etd                   DateTime
-  eta                   DateTime
+  eta                   DateTime?
   etdTimeKnown          Boolean               @default(true)
   etaTimeKnown          Boolean               @default(true)
   transitDays           Int?

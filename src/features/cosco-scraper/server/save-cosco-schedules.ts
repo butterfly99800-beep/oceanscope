@@ -13,7 +13,7 @@ type LiveScheduleSource = "COSCO_LIVE_QUERY" | "OOCL_LIVE_QUERY" | "CMA_LIVE_QUE
 const refreshedSources = new Set<string>(["MSC_LIVE_QUERY", "MAERSK_LIVE_QUERY", "HAPAG_LIVE_QUERY", "CMA_LIVE_QUERY"]);
 const formatPrefix = "port-v2:";
 export function currentScheduleFormat(source: string, reference: string | null) {
-  return source === "HMM_LIVE_QUERY" ? Boolean(reference?.startsWith("hmm-v3:")) : !refreshedSources.has(source) || Boolean(reference?.startsWith(formatPrefix));
+  return source === "OOCL_LIVE_QUERY" ? Boolean(reference?.startsWith("oocl-v4:")) : source === "HMM_LIVE_QUERY" ? Boolean(reference?.startsWith("hmm-v3:")) : !refreshedSources.has(source) || Boolean(reference?.startsWith(formatPrefix));
 }
 
 type SaveOptions = { mode?: "skipDuplicates" | "updateDuplicates"; originPort?: Port; destinationPort?: Port; source?: LiveScheduleSource; carrierCode?: string; carrierName?: string };
@@ -42,7 +42,7 @@ async function findCarrier(tx: Prisma.TransactionClient, options: SaveOptions) {
   return tx.carrier.create({ data: { name, code, country: countries[code] || "", status: "ACTIVE" } });
 }
 
-async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId: string, item: CoscoSchedulePreview, originPortId: string, destinationPortId: string, etd: Date, eta: Date) {
+async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId: string, item: CoscoSchedulePreview, originPortId: string, destinationPortId: string, etd: Date, eta: Date | null) {
   await tx.scheduleTransitPort.deleteMany({ where: { scheduleId } });
   await tx.scheduleRouteNode.deleteMany({ where: { scheduleId } });
   void item;
@@ -53,10 +53,10 @@ async function replaceScheduleChildren(tx: Prisma.TransactionClient, scheduleId:
 }
 
 function preservesRouting(item: CoscoSchedulePreview, source: LiveScheduleSource) {
-  return item.rawText.startsWith('{"officialLegs":') || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(source);
+  return (source === "OOCL_LIVE_QUERY" && item.rawText.includes("\nOfficial Desktop:")) || item.rawText.startsWith('{"officialLegs":') || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(source);
 }
 
-function createScheduleData(item: CoscoSchedulePreview, carrierId: string, originPortId: string, destinationPortId: string, etd: Date, eta: Date, source: LiveScheduleSource): Prisma.SailingScheduleUncheckedCreateInput {
+function createScheduleData(item: CoscoSchedulePreview, carrierId: string, originPortId: string, destinationPortId: string, etd: Date, eta: Date | null, source: LiveScheduleSource): Prisma.SailingScheduleUncheckedCreateInput {
   return {
     carrierId,
     routeId: null,
@@ -88,7 +88,7 @@ function createScheduleData(item: CoscoSchedulePreview, carrierId: string, origi
     source,
     fetchedAt: new Date(),
     rawSourceData: withTransitEvidence(source, item.rawText, item.direct === true ? [] : item.transitPorts),
-    sourceReference: ((source === "HMM_LIVE_QUERY" ? "hmm-v3:" : refreshedSources.has(source) ? formatPrefix : "") + item.id).slice(0, 160),
+    sourceReference: ((source === "OOCL_LIVE_QUERY" ? "oocl-v4:" : source === "HMM_LIVE_QUERY" ? "hmm-v3:" : refreshedSources.has(source) ? formatPrefix : "") + item.id).slice(0, 160),
     routingKey: preservesRouting(item, source) ? createHash("sha256").update(item.id).digest("hex") : "",
   };
 }
@@ -110,7 +110,7 @@ export async function saveCoscoSchedules(schedules: CoscoSchedulePreview[], opti
       }
       const etd = parseIso(item.etd);
       const eta = parseIso(item.eta);
-      if (!etd || !eta || etd >= eta) {
+      if (!etd || (item.eta != null && !eta) || (eta && etd >= eta)) {
         result.skipped += 1;
         result.skippedItems.push({ id: item.id, reason: "Missing or invalid ETD/ETA." });
         continue;

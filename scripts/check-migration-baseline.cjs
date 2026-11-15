@@ -22,7 +22,10 @@ const result = spawnSync(process.execPath, [require.resolve('prisma/build/index.
   cwd: root, encoding: 'utf8', env: { ...process.env, DATABASE_URL: 'mysql://unused:unused@127.0.0.1:1/unused', CHECKPOINT_DISABLE: '1' },
 });
 assert.equal(result.status, 0, result.stderr);
-const baselineOutput = result.stdout.replace(/\r\n/g, '\n').replace(/, '(?:ONE|EMC|YML|HMM|KMTC|PIL|SITC|ZIM)_LIVE_QUERY'/g, '').replace(/^.*`routingKey` VARCHAR\(64\).*\n/gm, '').replace('`sailingschedule_routing_identity_key`', '`sailingschedule_carrierId_vesselName_voyageNumber_originPort_key`').replace(', `routingKey`)', ')');
+const nullableEtaMigration = fs.readFileSync(path.join(root, 'prisma/migrations/20261115090000_nullable_schedule_eta/migration.sql'), 'utf8');
+assert(nullableEtaMigration.includes('ALTER TABLE `sailingschedule` MODIFY `eta` DATETIME(3) NULL;'));
+assert(!/\b(DROP|DELETE|TRUNCATE|UPDATE|INSERT)\b/.test(nullableEtaMigration));
+const baselineOutput = result.stdout.replace(/(CREATE TABLE `sailingschedule` \([\s\S]*?`eta` DATETIME\(3\)) NULL/, '$1 NOT NULL').replace(/\r\n/g, '\n').replace(/, '(?:ONE|EMC|YML|HMM|KMTC|PIL|SITC|ZIM)_LIVE_QUERY'/g, '').replace(/^.*`routingKey` VARCHAR\(64\).*\n/gm, '').replace('`sailingschedule_routing_identity_key`', '`sailingschedule_carrierId_vesselName_voyageNumber_originPort_key`').replace(', `routingKey`)', ')');
 assert.equal(baselineOutput.trim(), sql.replace(/\r\n/g, '\n').trim());
 console.log('PASS: 17 lowercase tables, unique constraints, schema-generated baseline, unchanged archived migration bytes');
 

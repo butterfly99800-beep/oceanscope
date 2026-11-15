@@ -8,7 +8,7 @@ const headers = {Authorization: 'Bearer ' + BRIDGE_TOKEN, 'Content-Type': 'appli
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (sender.id !== chrome.runtime.id) return;
   if (message.command === 'status') {
-    Promise.all([chrome.storage.session.get('enabled'),chrome.tabs.query({url:'https://www.cma-cgm.com/ebusiness/schedules/routing-finder*'}),chrome.tabs.query({url:'https://moc.oocl.com/nj_prs_wss/*'})]).then(([state,cma,oocl])=>reply({status:`${state.enabled?'已启用':'未启用'}；CMA 查询页 ${cma.filter(t=>!t.discarded).length}；OOCL 查询页 ${oocl.filter(t=>!t.discarded).length}；${lastStage}`}));
+    Promise.all([chrome.storage.session.get('enabled'),chrome.tabs.query({url:'https://www.cma-cgm.com/ebusiness/schedules*'}),chrome.tabs.query({url:'https://moc.oocl.com/nj_prs_wss/*'})]).then(([state,cma,oocl])=>reply({status:`${state.enabled?'已启用':'未启用'}；CMA 查询页 ${cma.filter(t=>!t.discarded).length}；OOCL 查询页 ${oocl.filter(t=>!t.discarded).length}；${lastStage}`}));
     return true;
   }
   if (message.command === 'enable') {
@@ -18,17 +18,28 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     });
     return true;
   } else if (message.command === 'disable') {
-    chrome.storage.session.set({enabled:false}); chrome.alarms.clear('poll'); reply({status: '已停止'});
+    chrome.storage.session.set({enabled:false}); chrome.alarms.clear('poll'); restoreDiscardPolicy(); reply({status: '已停止'});
   }
 });
 chrome.alarms.onAlarm.addListener(() => poll());
+async function keepQueryTab(tab) {
+  const state=await chrome.storage.session.get('discardPolicy');
+  const policy=state.discardPolicy||{};
+  if(!(tab.id in policy)){policy[tab.id]=tab.autoDiscardable!==false;await chrome.storage.session.set({discardPolicy:policy});}
+  await chrome.tabs.update(tab.id,{autoDiscardable:false});
+}
+async function restoreDiscardPolicy(){
+  const {discardPolicy={}}=await chrome.storage.session.get('discardPolicy');
+  await Promise.all(Object.entries(discardPolicy).map(([id,value])=>chrome.tabs.update(Number(id),{autoDiscardable:value}).catch(()=>{})));
+  await chrome.storage.session.remove('discardPolicy');
+}
 async function poll() {
   if (busy || !(await chrome.storage.session.get('enabled')).enabled) return;
   busy = true;
   try {
     // Only explicitly enabled CMA public schedule tabs are used.
     const ooclTabs=await chrome.tabs.query({url:'https://moc.oocl.com/nj_prs_wss/*'});
-    const cmaTabs = await chrome.tabs.query({url:'https://www.cma-cgm.com/ebusiness/schedules/routing-finder*'});
+    const cmaTabs = await chrome.tabs.query({url:'https://www.cma-cgm.com/ebusiness/schedules*'});
     const kinds = [ooclTabs.length && 'oocl-query', cmaTabs.length && 'cma-query'].filter(Boolean);
     kinds.sort((a,b) => Number(a===lastKind)-Number(b===lastKind));
     let job = {};
@@ -44,13 +55,14 @@ async function poll() {
     try {
       if(job.kind==='oocl-query') {
         const tab=ooclTabs.find(t=>!t.discarded);if(!tab)throw new Error('OOCL tab unavailable');
+        await keepQueryTab(tab);
         const values=await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:runOoclJob,args:[job]});
         result=values[0]?.result;if(!result)throw new Error('No OOCL response');
         lastStage = result.error ? job.kind + ': failed' : job.kind + ': completed';
         await fetch(base+'/result/'+encodeURIComponent(job.id),{method:'POST',headers,body:JSON.stringify(result)});return;
       }
       if (!['cma-query'].includes(job.kind)) throw new Error('Unsupported job');
-      const pattern = 'https://www.cma-cgm.com/ebusiness/schedules/routing-finder*';
+      const pattern = 'https://www.cma-cgm.com/ebusiness/schedules*';
       const tabs = (await chrome.tabs.query({url: pattern})).filter(tab=>!tab.discarded).sort((a,b)=>(b.lastAccessed||0)-(a.lastAccessed||0));
       let selected;
       for(const tab of tabs){
@@ -65,6 +77,7 @@ async function poll() {
         if(notices.some(items=>items[0]?.result))throw new Error('CMA_MAINTENANCE');
         throw new Error('No open official CMA query form is available');
       }
+      await keepQueryTab(selected);
       const values = await chrome.scripting.executeScript({target: {tabId: selected.id}, func: runPublicJob, args: [job]});
       result = values[0]?.result;
       if (!result) throw new Error('No result from official tab');
@@ -76,7 +89,7 @@ async function poll() {
 }
 async function runPublicJob(job) {
  try {
-  if (location.origin !== 'https://www.cma-cgm.com' || location.pathname !== '/ebusiness/schedules/routing-finder') throw new Error('Wrong official page');
+  if (location.origin !== 'https://www.cma-cgm.com' || !['/ebusiness/schedules','/ebusiness/schedules/','/ebusiness/schedules/routing-finder'].includes(location.pathname)) throw new Error('Wrong official page');
   const form = document.querySelector('#datepicker')?.closest('form');
   if (!form) throw new Error('Official query form unavailable');
   const action = new URL(form.action, location.href);

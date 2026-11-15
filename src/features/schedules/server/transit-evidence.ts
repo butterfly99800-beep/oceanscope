@@ -10,6 +10,9 @@ type Leg={from:string;to:string;name:string;arrival:string;departure:string;vess
 export function transitEvidence(source:string,raw:unknown,fallback:string[]=[]):ScheduleTransitPort[]{
  let root:RecordValue={};try{root=typeof raw==="string"?obj(JSON.parse(raw)):obj(raw);}catch{/* Unstructured official text. */}
  if(source==="OOCL_LIVE_QUERY"&&typeof raw==="string"&&!raw.trim().startsWith("{")){
+  // These are carrier-local fields, not the browser's serialized Date objects.
+  const desktop=raw.match(/(?:^|\n)Official Desktop Transfers: (.+)$/);
+  if(desktop){try{const nodes=list(JSON.parse(desktop[1]));if(nodes.length)return nodes.map(p=>({portName:str(p.portName),portCode:str(p.portCode),arrivalTime:date(p.arrivalTime),departureTime:date(p.departureTime),waitingHours:null,nextVesselName:str(p.nextVesselName)||undefined,nextVoyageNumber:str(p.nextVoyageNumber)||undefined,terminal:str(p.terminal)||undefined}));}catch{/* Ordinary text fallback below. */}}
   const value=(s:string,label:string)=>s.match(new RegExp(label+":"+"[ \t]*([^\n]+)","i"))?.[1]?.trim()||"";
   const blocks=raw.split(/(?=Service:)/).filter(b=>/POL:/.test(b)&&/POD:/.test(b));
   const nodes=blocks.slice(0,-1).flatMap((b,i)=>{const name=value(b,"POD"),next=blocks[i+1];if(!name||name.toLowerCase()!==value(next,"POL").toLowerCase())return [];const vessel=value(next,"Vessel Voyage");return [{portName:name,portCode:"",arrivalTime:"",departureTime:"",waitingHours:null,nextVesselName:vessel&&!/^TBA$/i.test(vessel)?vessel:undefined}];});

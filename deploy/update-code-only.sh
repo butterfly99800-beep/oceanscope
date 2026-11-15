@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Code-only release: no database writes, no worker/tunnel changes.
+# Default: code only. Explicit --nullable-eta allows one backed-up compatibility migration; no worker/tunnel changes.
 set -Eeuo pipefail
 umask 077
 [[ $EUID == 0 ]] || { echo 'Run with sudo bash'; exit 1; }
 sha=${1:?Full commit SHA required}
+eta_upgrade=${2:-}
+[[ -z $eta_upgrade || $eta_upgrade == --nullable-eta ]] || exit 1
 [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
 base=/srv/oceanscope
 repo=$base/app
@@ -21,7 +23,22 @@ runuser -u oceanscope -- git -C "$repo" fetch origin main
 runuser -u oceanscope -- git -C "$repo" merge-base --is-ancestor "$sha" origin/main
 oldsha=$(runuser -u oceanscope -- git -C "$old" rev-parse HEAD)
 if ! runuser -u oceanscope -- git -C "$repo" diff --quiet "$oldsha" "$sha" -- prisma/schema.prisma prisma/migrations; then
- echo 'Database structure differs; code-only update stopped for review'; exit 1
+ if [[ $eta_upgrade != --nullable-eta ]]; then
+  echo 'Database structure differs; code-only update stopped for review'; exit 1
+ fi
+ # Permit exactly this forward migration and the single nullable schema edit.
+ python3 - "$repo" "$oldsha" "$sha" <<'SCHEMA_CHECK'
+import subprocess,sys
+repo,old,new=sys.argv[1:]
+def git(*args): return subprocess.check_output(['git','-c','safe.directory='+repo,'-C',repo,*args])
+changed=set(git('diff','--name-only',old,new,'--','prisma/schema.prisma','prisma/migrations').decode().splitlines())
+expected={'prisma/schema.prisma','prisma/migrations/20261115090000_nullable_schedule_eta/migration.sql'}
+if changed != expected: raise SystemExit('Unexpected schema/migrations; stopped')
+a=git('show',old+':prisma/schema.prisma').decode().replace('\r\n','\n')
+b=git('show',new+':prisma/schema.prisma').decode().replace('\r\n','\n')
+import re
+if re.sub(r'(\beta\s+DateTime)\?',r'\1',b)!=a: raise SystemExit('Unexpected schema edit; stopped')
+SCHEMA_CHECK
 fi
 for data in public/uploads uploads storage; do
  [[ ! -e "$old/$data" ]] || { echo "User data at $data needs shared-directory review; stopped"; exit 1; }
@@ -50,6 +67,10 @@ cd "$release"
 runuser -u oceanscope -- npm ci --include=dev --ignore-scripts
 runuser -u oceanscope -- env DATABASE_URL=mysql://unused:unused@127.0.0.1:1/unused node node_modules/prisma/build/index.js generate
 runuser -u oceanscope -- env DATABASE_URL=mysql://unused:unused@127.0.0.1:1/unused OCEANSCOPE_DIST_DIR="$dist" npm run build
+if [[ $eta_upgrade == --nullable-eta ]]; then
+ # Build passed before backup/migration; this helper verifies every old checksum.
+ node scripts/upgrade-nullable-eta.mjs "$backup"
+fi
 link=$base/.current-code-$$
 rollback() {
  trap - ERR
@@ -68,4 +89,5 @@ pid=$(systemctl show oceanscope.service -p MainPID --value)
 [[ $(readlink -f "/proc/$pid/cwd") == "$release" ]]
 trap - ERR
 printf 'Published %s; login HTTP 200\nPrevious release: %s\nConfig backup: %s\n' "$sha" "$old" "$backup"
-echo 'No database migrations, worker restarts, SSH changes or release deletions performed.'
+echo 'No worker restarts, SSH changes, seed, reset or release deletions performed.'
+[[ -z $eta_upgrade ]] || echo 'Nullable ETA compatibility checked; never reverse this migration or restore data automatically.'
