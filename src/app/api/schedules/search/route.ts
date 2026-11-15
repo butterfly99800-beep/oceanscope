@@ -1,5 +1,3 @@
-import { allowCmaMaintenanceFallback } from "@/features/shipping/providers/cma/maintenance";
-import { ooclItineraryEvidence } from "@/features/shipping/providers/oocl/itinerary";
 import { scheduleDateWindows } from "@/features/shipping/providers/query-windows";
 import type { QueryAudit } from "@/features/shipping/providers/query-audit";
 import { pruneQueryStates } from "@/features/schedules/lib/pruneQueryStates";
@@ -133,7 +131,7 @@ async function queryDestinations(targets: Port[], query: (port: Port) => Promise
 
 async function withProviderTimeout(code: string, task: Promise<LiveProviderResult>): Promise<LiveProviderResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = (code === "OOCL" || code === "CMA") ? Math.max(providerTimeoutMs(), 205000) : providerTimeoutMs();
+  const timeout = code === "OOCL" ? Math.max(providerTimeoutMs(), 205000) : providerTimeoutMs();
   try {
     return await Promise.race([
       task,
@@ -222,9 +220,7 @@ async function listPayload(where: Prisma.SailingScheduleWhereInput, searchParams
 type SourcePort = Pick<Port, "name" | "nameZh" | "locode">;
 function latestScheduleSnapshots<T extends { id: string; source: ScheduleDataSource; originPortId: string; destinationPortId: string; vesselName: string | null; voyageNumber: string | null; serviceName: string | null; frequency: string | null; updatedAt: Date; rawSourceData: Prisma.JsonValue | null; sourceReference: string | null }>(rows: T[]): T[] {
   const latest = new Map<string, T>();
-  const identity = (row: T) => row.source === "OOCL_LIVE_QUERY" && typeof row.rawSourceData === "string"
-    ? JSON.stringify([row.source,row.originPortId,row.destinationPortId,ooclItineraryEvidence(row.rawSourceData)])
-    : row.vesselName && row.voyageNumber
+  const identity = (row: T) => row.vesselName && row.voyageNumber
     ? JSON.stringify([row.source, row.originPortId, row.destinationPortId, row.vesselName, row.voyageNumber, row.serviceName, row.frequency,
       ((typeof row.rawSourceData === "string" && row.rawSourceData.startsWith('{"officialLegs":')) || ["EMC_LIVE_QUERY", "YML_LIVE_QUERY", "HMM_LIVE_QUERY", "KMTC_LIVE_QUERY", "PIL_LIVE_QUERY", "SITC_LIVE_QUERY", "ZIM_LIVE_QUERY"].includes(row.source)) ? row.sourceReference : null]) : row.id;
   for (const row of rows) {
@@ -241,14 +237,6 @@ function sourceMatchesPorts(row: { source: ScheduleDataSource; sourceReference: 
   if (!row.rawSourceData) return false;
   const text = typeof row.rawSourceData === "string" ? row.rawSourceData : JSON.stringify(row.rawSourceData);
   const matches = matchesSourcePort;
-  // Accept explicitly identified global or regional official sources.
-  // The mapper labels regional tables separately from global routing results.
-  if (row.source === "CMA_LIVE_QUERY") {
-    try {
-      const raw = JSON.parse(text);
-      if (raw.sourceUrl !== "https://www.cma-cgm.com.cn/LaraToolkit/ShipScheduleInquery" && !/^https:\/\/www\.cma-cgm\.com\/ebusiness\/schedules(?:\/routing-finder)?$/.test(raw.sourceUrl || "")) return false;
-    } catch { return false; }
-  }
   if (row.source === "COSCO_LIVE_QUERY") {
     try {
       type Leg = { pol?: string; pod?: string; polPortCode?: string; podPortCode?: string };
@@ -446,19 +434,9 @@ export async function GET(request: Request) {
         staleWhere.updatedAt = { gte: new Date(state.startedAt) };
         staleWhere.source = { in: state.providers.filter((provider) => provider.status === "success").map((provider) => sourceForProvider(provider.code)) };
       }
-      // During confirmed CMA maintenance retain only previously verified global rows,
-      // bounded to 24 hours and the requested route/date range. Forced tests never use them.
-      const maintenanceFallback = allowCmaMaintenanceFallback(Boolean(state.forceRefresh), state.providers);
-      if (maintenanceFallback) {
-        delete staleWhere.updatedAt;
-        staleWhere.AND = [...(Array.isArray(staleWhere.AND) ? staleWhere.AND : staleWhere.AND ? [staleWhere.AND] : []), { OR: [
-          { updatedAt: { gte: cacheCutoff() } },
-          { source: ScheduleDataSource.CMA_LIVE_QUERY, updatedAt: { gte: new Date(Date.now()-24*60*60*1000) } }
-        ] }];
-      }
       const payload = await listPayload(staleWhere, searchParams);
       return NextResponse.json({ ...payload, done: state.done, providers: state.providers.map((provider) => ({ ...provider,
-        resultCount: (provider.status === "success" || provider.status === "cached" || (maintenanceFallback && provider.code === "CMA")) ? payload.providerCounts[provider.code] ?? 0 : provider.resultCount,
+        resultCount: provider.status === "success" || provider.status === "cached" ? payload.providerCounts[provider.code] ?? 0 : provider.resultCount,
       })) });
     }
 

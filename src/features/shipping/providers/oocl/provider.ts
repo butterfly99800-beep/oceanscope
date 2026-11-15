@@ -1,5 +1,3 @@
-import {queryOoclSession} from "./session-client";
-import { mergeOoclCargoVariants } from "./itinerary";
 import { queryServiceLoops } from "./loop-schedules";
 import type { Port } from "@prisma/client";
 import { getCarrierPortMapping } from "@/features/ports/server/port-normalizer";
@@ -233,7 +231,7 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
   },
 };
 
-const OOCLRawProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
+export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
   code: "OOCL",
   async searchSchedule(input) {
     const started = Date.now();
@@ -309,12 +307,4 @@ const OOCLRawProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderRes
       ...(!second.schedules.length && !second.warnings.includes("NO_SCHEDULE_FOUND") ? [httpFailure, ...first.warnings] : []),
       "OOCL_RETRIED_ONCE: transient public form transition was retried once"] };
   },
-};
-
-export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
- code: "OOCL",
- async searchSchedule(input) { if(process.env.OOCL_USE_BROWSER_SESSION === "true") {
- try {const desktop=await queryOoclSession(input);return {...desktop,schedules:mergeOoclCargoVariants(desktop.schedules)};}
- catch(error){const fallback=await OOCLRawProvider.searchSchedule(input);return {...fallback,warnings:["OOCL_DESKTOP_UNAVAILABLE: "+(error instanceof Error?error.message:"query failed"),...fallback.warnings]};}
- } const result = await OOCLRawProvider.searchSchedule(input); return {...result, schedules: mergeOoclCargoVariants(result.schedules)}; }
 };
