@@ -1,3 +1,4 @@
+import {queryOoclSession} from "./session-client";
 import { mergeOoclCargoVariants } from "./itinerary";
 import { queryServiceLoops } from "./loop-schedules";
 import type { Port } from "@prisma/client";
@@ -312,5 +313,8 @@ const OOCLRawProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderRes
 
 export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProviderResult> = {
  code: "OOCL",
- async searchSchedule(input) { const result = await OOCLRawProvider.searchSchedule(input); return {...result, schedules: mergeOoclCargoVariants(result.schedules)}; }
+ async searchSchedule(input) { if(process.env.OOCL_USE_BROWSER_SESSION === "true") {
+ try {const desktop=await queryOoclSession(input);return {...desktop,schedules:mergeOoclCargoVariants(desktop.schedules)};}
+ catch(error){const fallback=await OOCLRawProvider.searchSchedule(input);return {...fallback,warnings:["OOCL_DESKTOP_UNAVAILABLE: "+(error instanceof Error?error.message:"query failed"),...fallback.warnings]};}
+ } const result = await OOCLRawProvider.searchSchedule(input); return {...result, schedules: mergeOoclCargoVariants(result.schedules)}; }
 };

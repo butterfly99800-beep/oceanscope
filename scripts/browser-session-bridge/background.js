@@ -21,13 +21,20 @@ async function poll() {
   busy = true;
   try {
     // Only explicitly enabled CMA public schedule tabs are used.
-    const kinds = 'cma-query';
+    const ooclTabs=await chrome.tabs.query({url:'https://moc.oocl.com/nj_prs_wss/*'});
+    const kinds = ooclTabs.length ? 'oocl-query' : 'cma-query';
     const response = await fetch(base + '/next?kind=' + kinds, {headers, cache: 'no-store'});
     if (!response.ok) throw new Error('Bridge authentication failed');
     const job = await response.json();
     if (!job.id) return;
     let result;
     try {
+      if(job.kind==='oocl-query') {
+        const tab=ooclTabs.find(t=>!t.discarded);if(!tab)throw new Error('OOCL tab unavailable');
+        const values=await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:runOoclJob,args:[job]});
+        result=values[0]?.result;if(!result)throw new Error('No OOCL response');
+        await fetch(base+'/result/'+encodeURIComponent(job.id),{method:'POST',headers,body:JSON.stringify(result)});return;
+      }
       if (!['cma-query'].includes(job.kind)) throw new Error('Unsupported job');
       const pattern = 'https://www.cma-cgm.com/ebusiness/schedules/routing-finder*';
       const tabs = (await chrome.tabs.query({url: pattern})).filter(tab=>!tab.discarded).sort((a,b)=>(b.lastAccessed||0)-(a.lastAccessed||0));
@@ -99,4 +106,31 @@ async function runPublicJob(job) {
   section.querySelectorAll('script,input,textarea,iframe').forEach(el => el.remove());
   return {kind: job.kind, fresh: true, sourceUrl: response.url, startedAt, completedAt: new Date().toISOString(), criteria: {origin: job.origin,destination: job.destination,date: job.date,weeks: job.weeks}, count: cards.length, html: section.outerHTML};
  } catch(error) { return {error:String(error.message || error)}; }
+}
+
+async function runOoclJob(job) {
+ try {
+  if(location.origin!=='https://moc.oocl.com')throw Error('Wrong official origin');
+  const nodes=[...document.querySelectorAll('[ng-controller],body')];
+  const scope=nodes.map(el=>window.angular?.element(el).scope()).find(s=>s?.getResult && s?.user);
+  if(!scope)throw Error('Official OOCL search controller unavailable');
+  const codes=p=>(p?.Codes||[]).filter(x=>x.Standard==='UNLocode').map(x=>x.Code);
+  const origins=codes(scope.user.origin),destinations=codes(scope.user.destination);
+  if(!origins.includes(job.origin) || !(destinations.includes(job.destination)||(job.destination==='USLGB'&&destinations.includes('USLAX'))))throw Error('Select requested official ports first');
+  const previous=scope.originalResponse,startedAt=new Date().toISOString();
+  scope.$applyAsync(()=>{scope.user.date=job.date;scope.user.weeks=String(job.weeks);scope.user.sailing='sailing.from';scope.getResult();});
+  const deadline=Date.now()+100000;
+  while(Date.now()<deadline){
+   await new Promise(r=>setTimeout(r,500));
+   if(scope.originalResponse && scope.originalResponse!==previous){
+    if(scope.originalResponse.success!==true)throw Error('OOCL official query rejected');
+    const count=Number(scope.originalResponse.data?.numberOfRouteReturn);
+    if(!Number.isInteger(count))throw Error('OOCL official count missing');
+    if(count && scope.ProcessedResults?.length!==count)continue;
+    return {kind:job.kind,fresh:true,sourceUrl:location.origin+location.pathname,startedAt,completedAt:new Date().toISOString(),criteria:{origin:job.origin,destination:job.destination,date:job.date,weeks:job.weeks},count,rows:JSON.parse(JSON.stringify(scope.ProcessedResults||[])),routes:JSON.parse(JSON.stringify(scope.originalResponse.data.standardRoutes||[]))};
+   }
+  }
+  throw Error('OOCL official query timeout or verification required');
+
+ } catch(e){return {error:String(e.message||e)}}
 }

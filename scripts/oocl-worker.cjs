@@ -5,6 +5,15 @@ const path = require('node:path');
 const Module = require('node:module');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
+// Optional local settings contain paths/flags only; the existing worker token is unchanged.
+const settingsFile=process.platform==='win32' && process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA,'OceanScope','worker-settings.json') : '';
+if(settingsFile && fs.existsSync(settingsFile)) {
+ const settings=JSON.parse(fs.readFileSync(settingsFile,'utf8'));
+ if(settings.OOCL_USE_BROWSER_SESSION===true && typeof settings.OOCL_SESSION_TOKEN_FILE==='string' && path.isAbsolute(settings.OOCL_SESSION_TOKEN_FILE)) {
+  process.env.OOCL_USE_BROWSER_SESSION='true';process.env.OOCL_SESSION_TOKEN_FILE=settings.OOCL_SESSION_TOKEN_FILE;
+ }
+}
+
 
 const resolveFilename = Module._resolveFilename;
 Module._resolveFilename = function (request, parent, ...args) {
