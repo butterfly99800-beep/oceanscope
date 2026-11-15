@@ -25,3 +25,10 @@ const next=['3','PUSAN','SAVANNAH','NOV-24-2026','DEC-24-2026','NUE2','COSCO SHI
 assert.deepEqual(evergreenRouting([first,wait,next],'QINGDAO','SAVANNAH'),{direct:false,stopCount:1});
 assert.equal(evergreenRouting([first,{...next,1:'SINGAPORE'}],'QINGDAO','SAVANNAH').direct,null);
 assert.equal(evergreenRouting([first,[...wait.slice(0,2),'SINGAPORE',...wait.slice(3)],next],'QINGDAO','SAVANNAH').direct,null);
+
+const {evergreenSeaEvidence}=load(path.join(__dirname,'../src/features/shipping/providers/emc/provider.ts'));
+const inland=['2','LONG BEACH, CA','LOS ANGELES, CA','NOV-26-2026','NOV-26-2026','Intermodal','----','0'];
+assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LONG BEACH, CA').days,11);
+assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LONG BEACH, CA').direct,true);
+assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LOS ANGELES, CA').days,null);
+assert.equal(evergreenSeaEvidence([leg,inland],'SHANGHAI','LOS ANGELES, CA').direct,null);

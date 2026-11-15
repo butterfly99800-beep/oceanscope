@@ -1,3 +1,4 @@
+import { mergeOoclCargoVariants } from "./itinerary";
 import { readFile } from "node:fs/promises";
 import {parseOoclDesktopRows} from "./desktop-parser";
 import { canonicalPortCode } from "@/features/ports/server/source-port-match";
@@ -27,7 +28,7 @@ export async function queryOoclSession(input:OoclProviderSearchInput):Promise<Oo
    for(const key of Object.keys(criteria) as (keyof typeof criteria)[])if(result.criteria?.[key]!==criteria[key])throw new Error("Query criteria mismatch");
    if(!Number.isFinite(Date.parse(result.startedAt))||!Number.isFinite(Date.parse(result.completedAt))||Date.parse(result.startedAt)<started-1000||Date.parse(result.completedAt)<Date.parse(result.startedAt)||Date.parse(result.completedAt)>Date.now()+1000)throw new Error("Stale official response");
    if(result.rows.length!==result.count)throw new Error("Official row count mismatch");
-   const schedules=parseOoclDesktopRows(result.rows,from,to,criteria.destination,result.routes);
+   const schedules=mergeOoclCargoVariants(parseOoclDesktopRows(result.rows,from,to,criteria.destination,result.routes));
    return {source:"OOCL_LIVE",schedules,warnings:schedules.length?[]:["NO_SCHEDULE_FOUND"],durationMs:Date.now()-started,fromCache:false};
   }
   if(response.status!==202)throw new Error("Session job unavailable");

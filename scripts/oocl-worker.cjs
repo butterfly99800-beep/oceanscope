@@ -16,6 +16,17 @@ require.extensions['.ts'] = (module, filename) => {
 };
 const http = require('node:http');
 const { timingSafeEqual, createHash } = require('node:crypto');
+// Read only the explicitly enabled desktop connector settings; never replace worker auth.
+if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+  const settingsFile = path.join(process.env.LOCALAPPDATA, 'OceanScope', 'worker-settings.json');
+  if (fs.existsSync(settingsFile)) {
+    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    if (settings.OOCL_USE_BROWSER_SESSION === true && typeof settings.OOCL_SESSION_TOKEN_FILE === 'string') {
+      process.env.OOCL_USE_BROWSER_SESSION = 'true';
+      process.env.OOCL_SESSION_TOKEN_FILE = settings.OOCL_SESSION_TOKEN_FILE;
+    }
+  }
+}
 const { OOCLProvider } = require('../src/features/shipping/providers/oocl/provider.ts');
 const token = process.env.OOCL_WORKER_TOKEN;
 if (!token || token.length < 32) throw new Error('Set OOCL_WORKER_TOKEN (at least 32 characters)');

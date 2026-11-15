@@ -174,7 +174,11 @@ const OOCLSingleAttempt: ShippingProvider<OoclProviderSearchInput, OoclProviderR
         return { source: "OOCL_LIVE", schedules: [], warnings: [`OOCL_PUBLIC_PAGE_FAILED: official mobile entry HTTP ${entryResponse.status()}`], durationMs: Date.now() - started, fromCache: false };
       }
       await page.locator("body").waitFor({state:"attached",timeout:20000});
-      if (/\[QF17\]/i.test(await page.locator("body").innerText())) throw new Error("OOCL_AUTH_REQUIRED: QF17");
+      const entryText = await page.locator("body").innerText();
+      if (/\[QF17\]/i.test(entryText)) throw new Error("OOCL_AUTH_REQUIRED: QF17");
+      if (/This page can.t be displayed|incident ID|request rejected|access denied/i.test(entryText)) {
+        throw new Error("OOCL_ACCESS_BLOCKED: official entry returned an error page without a query form");
+      }
       if (await detectHumanVerification(page)) {
         return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL_CAPTCHA_REQUIRED"], durationMs: Date.now() - started, fromCache: false };
       }
@@ -256,6 +260,15 @@ export const OOCLProvider: ShippingProvider<OoclProviderSearchInput, OoclProvide
       } catch {
         return { source: "OOCL_LIVE", schedules: [], warnings: ["OOCL_LOCAL_WORKER_UNAVAILABLE: check local worker and SSH tunnel"], fromCache: false, durationMs: Date.now() - started };
       }
+    }
+    // Use the validated desktop connector only for its supported route scope.
+    if (process.env.OOCL_USE_BROWSER_SESSION === "true" && canonicalPortCode(input.originPort.locode) === "CNSHA"
+        && ["USLAX", "USLGB"].includes(canonicalPortCode(input.destinationPort.locode))) {
+      try {
+        const { queryOoclSession } = await import("./session-client");
+        const desktop = await queryOoclSession(input);
+        if (desktop.schedules.length || desktop.warnings.includes("NO_SCHEDULE_FOUND")) return desktop;
+      } catch { /* Keep the independent mobile and PDF fallback available. */ }
     }
     // Browser form first: retain its session when reading official detail responses.
     const browserResult = await OOCLSingleAttempt.searchSchedule(input).catch((error):OoclProviderResult=>({source:"OOCL_LIVE",schedules:[],warnings:["OOCL_BROWSER_FAILED: "+(error instanceof Error?error.message.split("\n")[0]:"launch failed")],durationMs:Date.now()-started,fromCache:false}));

@@ -45,6 +45,17 @@ export function evergreenRouting(legs: string[][] | undefined, origin: string, d
  const changes=vessels.slice(1).filter((v,i)=>v!==vessels[i]).length;
  return {direct:changes===0,stopCount:changes};
 }
+// Scope evidence to the actual displayed discharge port, excluding later inland legs.
+export function evergreenSeaEvidence(legs: string[][] | undefined, origin: string, destination: string) {
+  if (!legs?.length || legs.some(l => l.length !== 8) || legs[0][1] !== origin) return null;
+  const end = legs.findIndex(l => l[2] === destination && l[5] !== "WAITING");
+  if (end < 0) return null;
+  const scoped = legs.slice(0, end + 1);
+  const routing = evergreenRouting(scoped, origin, destination);
+  // A single sea leg has an explicit published duration. Never subtract inland days.
+  const days = scoped.length === 1 && routing.direct === true && /^\d+$/.test(scoped[0][7]) ? Number(scoped[0][7]) : null;
+  return { ...routing, days, scoped };
+}
 export function mapEvergreen(html: string, originCode: string, destinationCode: string, from: string, to: string): CoscoSchedulePreview[] {
   const $ = load(html);
   const table = $("table.ec-table-border-bottom");
@@ -72,10 +83,11 @@ export function mapEvergreen(html: string, originCode: string, destinationCode: 
     const rawDetail = detail?.text().replace(/\s+/g, " ").trim() ?? "";
     const vesselName = params.get("vslName") || null, voyageNumber = params.get("voyage") || null;
     const days = clean(7);
+    const evidence = evergreenSeaEvidence(legs, clean(2), clean(5));
     results.push({ id: scheduleId("EMC", [originCode, pod, vesselName, voyageNumber, etd, eta, rawDetail]), carrierName: "EVERGREEN", originText: clean(2), destinationText: clean(5), originLocode: originCode, destinationLocode: pod,
       vesselName, voyageNumber, serviceName: clean(4) || null, routeName: null, etd, eta, etdTimeKnown: false, etaTimeKnown: false,
-      transitDays: pod === destinationCode && /^\d+$/.test(days) ? Number(days) : null,
-      direct: evergreenRouting(legs, clean(2), clean(5)).direct, stopCount: evergreenRouting(legs, clean(2), clean(5)).stopCount, transitPorts: [], originFacilityName: null, destinationFacilityName: null,
+      transitDays: pod === destinationCode && /^\d+$/.test(days) ? Number(days) : evidence?.days ?? null,
+      direct: evidence?.direct ?? null, stopCount: evidence?.stopCount ?? null, transitPorts: [], originFacilityName: null, destinationFacilityName: null,
       cutOffTime: emcDate(clean(3)), availableTime: null,
       rawText: JSON.stringify({ sourceUrl: ENDPOINT, officialRouting: rawDetail, officialLegs: legs, receipt: clean(1), delivery: clean(6), timeBasis: "official local dates; offset not supplied" }) });
   });
