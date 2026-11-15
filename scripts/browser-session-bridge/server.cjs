@@ -30,9 +30,14 @@ const server = http.createServer(async (req, res) => {
     for await (const chunk of req) {body += chunk; if (body.length > 8000000) return send(413, {});}
     const data = JSON.parse(body);
     if (req.method === 'POST' && req.url === '/jobs') {
-      if (jobs.size >= 4 || !['cma-query','oocl-query'].includes(data.kind) || !/^[A-Z]{2}[A-Z0-9]{3}$/.test(data.origin||'') || !/^[A-Z]{2}[A-Z0-9]{3}$/.test(data.destination||'') || !/^\d{4}-\d{2}-\d{2}$/.test(data.date||'') || !Number.isInteger(data.weeks) || data.weeks<1 || data.weeks>10) return send(400, {});
+      if (!['cma-query','oocl-query'].includes(data.kind) || !/^[A-Z]{2}[A-Z0-9]{3}$/.test(data.origin||'') || !/^[A-Z]{2}[A-Z0-9]{3}$/.test(data.destination||'') || !/^\d{4}-\d{2}-\d{2}$/.test(data.date||'') || !Number.isInteger(data.weeks) || data.weeks<1 || data.weeks>10) return send(400, {});
+      if ([...jobs.values()].filter(job => !job.result).length >= 4) return send(429, {error:'Session queue busy'});
+      for (const [oldId, oldJob] of jobs) {
+        if (jobs.size < 32) break;
+        if (oldJob.result) jobs.delete(oldId);
+      }
       const id = randomBytes(16).toString('hex');
-      const request = {id,kind:data.kind,origin:data.origin,destination:data.destination,date:data.date,weeks:data.weeks};
+      const request = {id,kind:data.kind,origin:data.origin,destination:data.destination,date:data.date,weeks:data.weeks,originName:typeof data.originName==='string'?data.originName.slice(0,100):undefined,destinationName:typeof data.destinationName==='string'?data.destinationName.slice(0,100):undefined};
       jobs.set(id, {request,created:Date.now(),claimed:false}); return send(201, {id});
     }
     if (req.method === 'POST' && /^\/result\/[a-f0-9]{32}$/.test(req.url)) {
